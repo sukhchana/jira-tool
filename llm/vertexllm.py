@@ -1,137 +1,102 @@
 from utils import bootstrap  # This must be the first import
 import os
-import aiohttp
-import json
 from typing import Optional, Dict, Any
-from fastapi import HTTPException
 from loguru import logger
+import vertexai
+from vertexai.generative_models import GenerativeModel, GenerationConfig
+from google.oauth2 import service_account
 
 class VertexLLM:
-    """Service class for interacting with Google's Vertex AI LLM (Gemini) via REST API"""
-    
+    """Interface for Google Cloud's Vertex AI Gemini service using the official SDK"""
+
     def __init__(self):
-        """Initialize Vertex AI connection"""
+        self.initialize_vertex_ai()
+    
+
+    def get_credentials(self) -> service_account.Credentials:
+        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        if not credentials_path:
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is required")
+        return service_account.Credentials.from_service_account_file(credentials_path)
+
+
+
+    def initialize_vertex_ai(self):
+        """Initialize Vertex AI client with project and endpoint settings"""
         try:
-            logger.info("Initializing Vertex AI connection")
-            
             # Get configuration from environment variables
-            self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-            self.location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            project_id = os.getenv('GCP_PROJECT_ID')
+            location = os.getenv('VERTEX_LOCATION', 'us-central1')
+            endpoint = os.getenv('VERTEX_API_ENDPOINT', f'{location}-aiplatform.googleapis.com')
             
-            if not self.project_id:
-                raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is not set")
-
-            # Base URL for Vertex AI API
-            self.base_url = f"https://{self.location}-aiplatform.googleapis.com/v1"
+            if not project_id:
+                raise ValueError("GCP_PROJECT_ID environment variable is required")
             
-            # Get credentials
-            from google.oauth2 import service_account
-            from google.auth.transport import requests
-
-            credentials = service_account.Credentials.from_service_account_file(
-                os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            # Initialize Vertex AI with specific configurations
+            vertexai.init(
+                project=project_id,
+                location=location,
+                api_endpoint=endpoint,
+                credentials=self.get_credentials(),
+                api_transport="rest"
             )
             
-            # Store auth header
-            auth_req = requests.Request()
-            credentials.refresh(auth_req)
-            self.headers = {
-                "Authorization": f"Bearer {credentials.token}",
-                "Content-Type": "application/json"
-            }
-            
-            logger.info("Successfully initialized Vertex AI connection")
-
         except Exception as e:
-            error_msg = f"Failed to initialize Vertex AI: {str(e)}"
-            logger.error(error_msg)
-            raise HTTPException(
-                status_code=500,
-                detail=error_msg
-            )
-
+            logger.error(f"Failed to initialize Vertex AI LLM: {str(e)}")
+            raise
+    
     async def generate_content(
         self,
         prompt: str,
-        *,
-        max_output_tokens: int = 1024,
         temperature: float = 0.2,
         top_p: float = 0.8,
-        top_k: int = 40
+        top_k: int = 40,
+        **kwargs: Dict[str, Any]
     ) -> str:
-        """Generate content using Vertex AI REST API"""
-        try:
-            logger.debug(f"Generating content with prompt length: {len(prompt)}")
+        """
+        Generate content using Vertex AI's Gemini model.
+        
+        Args:
+            prompt: The input prompt for generation
+            temperature: Controls randomness (0.0-1.0)
+            top_p: Nucleus sampling parameter
+            top_k: Number of highest probability tokens to consider
+            **kwargs: Additional parameters for the model
             
-            # Endpoint for text generation
-            url = f"{self.base_url}/projects/{self.project_id}/locations/{self.location}/publishers/google/models/gemini-1.5-pro:generateContent"
+        Returns:
+            Generated text response
             
-            # Prepare request payload
-            payload = {
-                "contents": [{
-                    "role": "user",
-                    "parts": [{"text": prompt}]
-                }],
-                "generation_config": {
-                    "max_output_tokens": max_output_tokens,
-                    "temperature": temperature,
-                    "top_p": top_p,
-                    "top_k": top_k
-                }
-            }
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers, json=payload) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        
-                        # Extract generated text from response
-                        try:
-                            generated_text = result["candidates"][0]["content"]["parts"][0]["text"]
-                            logger.info("Successfully generated content from Vertex AI")
-                            return generated_text
-                        except (KeyError, IndexError) as e:
-                            raise ValueError(f"Unexpected response format: {str(e)}")
-                    else:
-                        error_msg = (
-                            f"Vertex AI API Error:\n"
-                            f"URL: {url}\n"
-                            f"Status Code: {response.status}\n"
-                            f"Response: {await response.text()}"
-                        )
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=error_msg
-                        )
-
-        except Exception as e:
-            logger.error(f"LLM generation failed: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"LLM generation failed: {str(e)}"
-            )
-
-    async def refresh_token(self):
-        """Refresh the authentication token"""
+        Raises:
+            Exception: If content generation fails
+        """
         try:
-            from google.oauth2 import service_account
-            from google.auth.transport import requests
-
-            credentials = service_account.Credentials.from_service_account_file(
-                os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            logger.debug(f"Generating content with temperature={temperature}")
+            logger.debug(f"Prompt length: {len(prompt)} characters")
+            
+            # Configure generation parameters
+            generation_config = GenerationConfig(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                candidate_count=1
             )
             
-            auth_req = requests.Request()
-            credentials.refresh(auth_req)
-            self.headers["Authorization"] = f"Bearer {credentials.token}"
+            model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
+            self.model = GenerativeModel(model_version)
+
+            # Generate content using the model
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config,
+                **kwargs
+            )
             
-            logger.debug("Successfully refreshed Vertex AI token")
+            generated_text = response.text
+            logger.debug(f"Generated response length: {len(generated_text)} characters")
+            
+            return generated_text
             
         except Exception as e:
-            logger.error(f"Failed to refresh token: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to refresh authentication token: {str(e)}"
-            ) 
+            logger.error(f"Failed to generate content: {str(e)}")
+            logger.error(f"Prompt that caused error:\n{prompt}")
+            raise
