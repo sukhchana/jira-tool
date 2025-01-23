@@ -1,0 +1,8 @@
+node_modules/
+.env
+s-chana-4d89d57ae610.json
+.venv/
+.DS_Store/
+__pycache__/
+.idea/
+logs/
