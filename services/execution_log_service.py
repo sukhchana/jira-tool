@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import Dict, Any
 from loguru import logger
 import json
+from uuid_extensions import uuid7  # Correct import for uuid7
+
 
 class ExecutionLogService:
     """Service for logging execution details to markdown files"""
@@ -10,6 +12,7 @@ class ExecutionLogService:
     def __init__(self, epic_key: str):
         """Initialize with epic key to create unique log file"""
         self.epic_key = epic_key
+        self.execution_id = str(uuid7())  # Generate UUID-7
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filename = f"execution_plans/EXECUTION_{epic_key}_{self.timestamp}.md"
         
@@ -18,15 +21,21 @@ class ExecutionLogService:
         
         # Initialize the file with header
         with open(self.filename, "w") as f:
-            f.write(f"# Execution Plan for {epic_key}\n\n")
-            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"# EXECUTION_PLAN_ID: {self.execution_id}\n\n")
+            f.write(f"## Epic: {epic_key}\n")
+            f.write(f"## Started: {datetime.now().isoformat()}\n\n")
     
     def log_section(self, title: str, content: str):
         """Log a new section to the execution plan"""
         try:
             with open(self.filename, "a") as f:
                 f.write(f"\n## {title}\n\n")
-                f.write(f"```\n{content}\n```\n")
+                # Check if content is JSON-serializable
+                try:
+                    json_obj = json.loads(content) if isinstance(content, str) else content
+                    f.write(f"```json\n{json.dumps(json_obj, indent=2)}\n```\n")
+                except (json.JSONDecodeError, TypeError):
+                    f.write(f"```\n{content}\n```\n")
         except Exception as e:
             logger.error(f"Failed to log section to execution plan: {str(e)}")
     
@@ -44,7 +53,7 @@ class ExecutionLogService:
                 
                 if parsed_result:
                     f.write("### Parsed Result\n")
-                    f.write("```json\n")
+                    f.write("```json\n")  # Specify json language for formatting
                     f.write(f"{json.dumps(parsed_result, indent=2)}\n")
                     f.write("```\n")
         except Exception as e:

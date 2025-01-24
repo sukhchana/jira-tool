@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from typing import Dict, Any, List
 from services.jira_breakdown_service import JiraBreakdownService
 from services.jira_orchestration_service import JiraOrchestrationService
 from models import (
@@ -7,13 +7,17 @@ from models import (
     TicketGenerationResponse,
     ComplexityAnalysisRequest,
     ComplexityAnalysisResponse,
-    EpicBreakdownResponse
+    JiraEpicBreakdownResult,
+    JiraTaskDefinition
 )
 from loguru import logger
+from datetime import datetime
+from services.response_formatter_service import ResponseFormatterService
 
 router = APIRouter()
 jira_breakdown_service = JiraBreakdownService()
 jira_orchestration_service = JiraOrchestrationService()
+response_formatter = ResponseFormatterService()
 
 @router.post(
     "/generate-description/", 
@@ -43,21 +47,23 @@ async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
         ticket_description=request.ticket_description
     )
 
-@router.post(
-    "/break-down-epic/{epic_key}", 
-    response_model=EpicBreakdownResponse,
-    status_code=200,
-    summary="Break down epic",
-    description="Break down a JIRA epic into smaller tasks"
-)
-async def break_down_epic(epic_key: str):
+@router.post("/break-down-epic/{epic_key}", response_model=JiraEpicBreakdownResult)
+async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
     """Break down a JIRA epic into smaller tasks"""
-    logger.info(f"Received request to break down epic: {epic_key}")
-    return await jira_breakdown_service.break_down_epic(epic_key)
+    try:
+        result = await jira_breakdown_service.break_down_epic(epic_key)
+        return response_formatter.format_epic_breakdown(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to break down epic {epic_key}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to break down epic: {str(e)}"
+        )
 
 @router.post(
     "/create-epic-subtasks/{epic_key}", 
-    response_model=EpicBreakdownResponse,
+    response_model=JiraEpicBreakdownResult,
     status_code=200,
     summary="Create epic subtasks",
     description="Break down an epic and optionally create the subtasks in JIRA"

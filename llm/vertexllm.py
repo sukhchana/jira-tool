@@ -92,7 +92,12 @@ class VertexLLM:
             )
             
             generated_text = response.text
-            logger.debug(f"Generated response length: {len(generated_text)} characters")
+            
+            # Log just the response to console
+            logger.info("\n" + "="*80)
+            logger.info("LLM RESPONSE:")
+            logger.info(generated_text)
+            logger.info("="*80 + "\n")
             
             return generated_text
             

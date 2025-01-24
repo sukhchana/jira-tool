@@ -89,7 +89,7 @@ Please format the response as follows:
 
     @staticmethod
     def build_user_stories_prompt(epic_analysis: Dict[str, Any]) -> str:
-        """Build prompt for generating user stories"""
+        """Build prompt for generating user stories with Gherkin scenarios"""
         return f"""
         Please create user stories based on this epic analysis:
 
@@ -103,7 +103,7 @@ Please format the response as follows:
         </summary>
 
         Then, create 3-5 user stories that represent valuable features or capabilities.
-        For each user story, provide:
+        For each user story, provide both a description and Gherkin scenarios:
 
         <user_story>
         Task: User Story - [What the user can do]
@@ -112,32 +112,40 @@ Please format the response as follows:
         Complexity: [Low/Medium/High]
         Business Value: [High/Medium/Low]
         Dependencies: [List any dependencies]
+
+        Scenarios:
+        Scenario: [Happy path scenario name]
+        Given [initial context]
+        When [action is taken]
+        Then [expected outcome]
+        And [additional outcome if needed]
+
+        Scenario: [Alternative/error path name]
+        Given [initial context]
+        When [action is taken]
+        Then [expected outcome]
         </user_story>
 
         Remember:
-        - Each story should deliver clear user value
-        - Stories should be independent where possible
-        - Focus on user outcomes, not technical implementation
-        - Consider different user types/roles
-        - Stories should be estimable and testable
+        - Each story should have at least 2 scenarios (happy path and alternative/error path)
+        - Use clear, specific Gherkin steps
+        - Scenarios should be testable
+        - Include relevant business context
+        - Consider edge cases and error conditions
+        - Use consistent terminology
         """
 
     @staticmethod
     def build_technical_tasks_prompt(user_stories: List[Dict[str, Any]], epic_analysis: Dict[str, Any]) -> str:
-        """Build prompt for generating technical tasks for user stories"""
-        stories_context = "\n".join([
-            f"User Story {i+1}: {story['name']}\n{story['description']}"
-            for i, story in enumerate(user_stories)
-        ])
-        
+        """Build prompt for technical tasks generation"""
         return f"""
         Please create technical tasks needed to implement these user stories:
 
         User Stories:
-        {stories_context}
+        {PromptHelperService._format_user_stories(user_stories)}
 
         Technical Context:
-        {PromptHelperService._format_dict_for_prompt(epic_analysis)}
+        {PromptHelperService._format_epic_analysis(epic_analysis)}
 
         First, provide an implementation strategy:
         <strategy>
@@ -146,16 +154,25 @@ Please format the response as follows:
         Implementation Approach: [brief explanation]
         </strategy>
 
-        Then, for each user story, create the necessary technical tasks:
+        Then, for each user story, create the necessary technical tasks using EXACTLY this format:
 
         <technical_task>
-        Task: Technical Task - [What needs to be built]
-        Description: [Technical implementation details]
-        Technical Domain: [Specific technical area]
-        Complexity: [Low/Medium/High]
-        Dependencies: [Related user story or other tasks]
-        Implementation Notes: [Key technical considerations]
+        **Task:** Technical Task - [What needs to be built]
+        **Description:** [Technical implementation details]
+        **Technical Domain:** [Specific technical area]
+        **Complexity:** [Low/Medium/High]
+        **Dependencies:** [Related user story or other tasks]
+        **Implementation Notes:** [Key technical considerations]
         </technical_task>
+
+        Important Formatting Requirements:
+        1. Each task MUST be wrapped in <technical_task> tags
+        2. Each field MUST be prefixed with double asterisks and colon (e.g., **Task:**)
+        3. Each field MUST be on a new line
+        4. Fields MUST appear in the exact order shown above
+        5. All fields are required
+        6. Use clear, specific titles for tasks
+        7. Separate multiple dependencies with commas
 
         Requirements:
         - Each user story should have 1-2 technical tasks
@@ -163,6 +180,7 @@ Please format the response as follows:
         - No task should take more than 3 days
         - Include both frontend and backend work where relevant
         - Consider infrastructure and testing needs
+        - Break down complex tasks into smaller, manageable pieces
         """
 
     @staticmethod
@@ -217,6 +235,30 @@ Please format the response as follows:
             else:
                 result.append(f"{formatted_key}: {value}")
         return "\n".join(result)
+
+    @staticmethod
+    def _format_user_stories(user_stories: List[Dict[str, Any]]) -> str:
+        """Format user stories for use in prompts"""
+        formatted = []
+        for story in user_stories:
+            formatted.append(f"Story: {story['name']}")
+            formatted.append(f"Description: {story['description']}")
+            formatted.append(f"Technical Domain: {story['technical_domain']}")
+            formatted.append("")
+        return "\n".join(formatted)
+
+    @staticmethod
+    def _format_epic_analysis(epic_analysis: Dict[str, Any]) -> str:
+        """Format epic analysis for use in prompts"""
+        formatted = []
+        if "technical_domains" in epic_analysis:
+            formatted.append("Technical Domains:")
+            formatted.extend([f"- {domain}" for domain in epic_analysis["technical_domains"]])
+            formatted.append("")
+        if "core_requirements" in epic_analysis:
+            formatted.append("Core Requirements:")
+            formatted.extend([f"- {req}" for req in epic_analysis["core_requirements"]])
+        return "\n".join(formatted)
 
     def build_enhanced_tasks_prompt(
         self,

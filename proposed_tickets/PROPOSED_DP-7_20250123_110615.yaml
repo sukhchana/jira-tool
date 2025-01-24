@@ -1,0 +1,26 @@
+execution_id: 018d7e3c-2f5d-7d21-9535-df4688e3f123
+epic_key: DP-7
+timestamp: "2025-01-23T11:06:15.123456"
+id_counters:
+  USER-STORY: 5
+  TECHNICAL-TASK: 8
+  SUB-TASK: 23
+high_level_tasks:
+  - id: USER-STORY-1
+    type: User Story
+    name: "User Story - Login securely using existing enterprise credentials"
+    description: "As an End User, I want to..."
+    technical_domain: "Authentication"
+    complexity: "Medium"
+    dependencies: []
+    business_value: "High"
+subtasks:
+  "User Story - Login securely using existing enterprise credentials":
+    - id: SUB-TASK-1
+      title: "Implement OAuth2 login flow"
+      description: "Create the OAuth2 authentication flow..."
+      acceptance_criteria: "1. User can click login..."
+      story_points: 3
+      required_skills: ["OAuth2", "Python"]
+      dependencies: []
+      suggested_assignee: "Backend Developer" 

@@ -263,47 +263,60 @@ class TicketParserService:
 
     @staticmethod
     def parse_user_stories(response: str) -> List[Dict[str, Any]]:
-        """Parse user stories from LLM response"""
+        """Parse user stories including Gherkin scenarios from LLM response"""
         stories = []
         try:
-            logger.debug("Starting to parse user stories")
-            logger.debug(f"Raw response:\n{response}")
-            
-            # Extract summary if present
-            summary_match = re.search(r'<summary>(.*?)</summary>', response, re.DOTALL)
-            if summary_match:
-                summary = summary_match.group(1)
-                logger.info(f"User Stories Summary:\n{summary.strip()}")
-            
-            # Extract user stories
             story_matches = re.findall(r'<user_story>(.*?)</user_story>', response, re.DOTALL)
-            logger.debug(f"Found {len(story_matches)} user stories")
             
             for story in story_matches:
-                parsed_story = TicketParserService._parse_task_content(story, "User Story")
-                if parsed_story:
-                    # Add business value field specific to user stories
-                    if "Business Value:" in story:
-                        value_match = re.search(r'Business Value:\s*(\w+)', story)
-                        if value_match:
-                            parsed_story["business_value"] = value_match.group(1)
-                    stories.append(parsed_story)
-            
-            logger.debug(f"Successfully parsed {len(stories)} user stories")
+                # Extract basic story information
+                task_name = re.search(r'Task:\s*(.+?)(?=\n|$)', story)
+                description = re.search(r'Description:\s*(.+?)(?=\n|Technical)', story)
+                domain = re.search(r'Technical Domain:\s*(.+?)(?=\n|$)', story)
+                complexity = re.search(r'Complexity:\s*(.+?)(?=\n|$)', story)
+                value = re.search(r'Business Value:\s*(.+?)(?=\n|$)', story)
+                dependencies = re.search(r'Dependencies:\s*(.+?)(?=\n|Scenarios)', story)
+                
+                # Extract scenarios
+                scenarios_text = re.search(r'Scenarios:(.*?)(?=</user_story>|$)', story, re.DOTALL)
+                scenarios = []
+                
+                if scenarios_text:
+                    scenario_matches = re.findall(r'Scenario:.*?(?=Scenario:|$)', scenarios_text.group(1), re.DOTALL)
+                    for scenario in scenario_matches:
+                        scenario_dict = {
+                            "name": re.search(r'Scenario:\s*(.+?)(?=\n|$)', scenario).group(1).strip(),
+                            "steps": []
+                        }
+                        
+                        # Extract steps maintaining Gherkin keywords
+                        steps = re.findall(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', scenario)
+                        for keyword, step_text in steps:
+                            scenario_dict["steps"].append({
+                                "keyword": keyword,
+                                "text": step_text.strip()
+                            })
+                        
+                        scenarios.append(scenario_dict)
+                
+                if task_name and description:
+                    stories.append({
+                        "type": "User Story",
+                        "name": task_name.group(1).strip(),
+                        "description": description.group(1).strip(),
+                        "technical_domain": domain.group(1).strip() if domain else "",
+                        "complexity": complexity.group(1).strip() if complexity else "Medium",
+                        "business_value": value.group(1).strip() if value else "Medium",
+                        "dependencies": [d.strip() for d in dependencies.group(1).split(',')] if dependencies else [],
+                        "scenarios": scenarios
+                    })
+                
             return stories
             
         except Exception as e:
             logger.error(f"Failed to parse user stories: {str(e)}")
             logger.error(f"Response that caused error:\n{response}")
-            return [{
-                "type": "User Story",
-                "name": "Error in user story parsing",
-                "description": f"Failed to parse user stories: {str(e)}",
-                "technical_domain": "Unknown",
-                "complexity": "Medium",
-                "dependencies": [],
-                "business_value": "Medium"
-            }]
+            return []
 
     @staticmethod
     def parse_technical_tasks(response: str) -> List[Dict[str, Any]]:
@@ -313,25 +326,45 @@ class TicketParserService:
             logger.debug("Starting to parse technical tasks")
             logger.debug(f"Raw response:\n{response}")
             
-            # Extract strategy if present
-            strategy_match = re.search(r'<strategy>(.*?)</strategy>', response, re.DOTALL)
-            if strategy_match:
-                strategy = strategy_match.group(1)
-                logger.info(f"Implementation Strategy:\n{strategy.strip()}")
-            
             # Extract technical tasks
-            task_matches = re.findall(r'<technical_task>(.*?)</technical_task>', response, re.DOTALL)
+            task_matches = re.findall(r'<technical_task>\n?(.*?)</technical_task>', response, re.DOTALL)
             logger.debug(f"Found {len(task_matches)} technical tasks")
             
             for task in task_matches:
-                parsed_task = TicketParserService._parse_task_content(task, "Technical Task")
-                if parsed_task:
-                    # Add implementation notes field specific to technical tasks
-                    if "Implementation Notes:" in task:
-                        notes_match = re.search(r'Implementation Notes:\s*(.+?)(?=\n|$)', task, re.DOTALL)
-                        if notes_match:
-                            parsed_task["implementation_notes"] = notes_match.group(1).strip()
-                    tasks.append(parsed_task)
+                try:
+                    # Extract required fields using updated patterns
+                    task_name = re.search(r'\*\*Task:\*\* (?:Technical Task - )?(.*?)(?=\n|\*\*)', task)
+                    description = re.search(r'\*\*Description:\*\* (.*?)(?=\n|\*\*)', task)
+                    domain = re.search(r'\*\*Technical Domain:\*\* (.*?)(?=\n|\*\*)', task)
+                    complexity = re.search(r'\*\*Complexity:\*\* (.*?)(?=\n|\*\*)', task)
+                    dependencies = re.search(r'\*\*Dependencies:\*\* (.*?)(?=\n|\*\*)', task)
+                    impl_notes = re.search(r'\*\*Implementation Notes:\*\* (.*?)(?=\n|\*\*|$)', task, re.DOTALL)
+                    
+                    if task_name and description and domain and complexity:
+                        parsed_task = {
+                            "type": "Technical Task",
+                            "name": f"Technical Task - {task_name.group(1).strip()}",
+                            "description": description.group(1).strip(),
+                            "technical_domain": domain.group(1).strip(),
+                            "complexity": complexity.group(1).strip(),
+                            "dependencies": [d.strip() for d in dependencies.group(1).split(',')] if dependencies else [],
+                            "implementation_notes": impl_notes.group(1).strip() if impl_notes else ""
+                        }
+                        tasks.append(parsed_task)
+                        logger.debug(f"Successfully parsed task: {parsed_task['name']}")
+                    else:
+                        missing = []
+                        if not task_name: missing.append("task name")
+                        if not description: missing.append("description")
+                        if not domain: missing.append("domain")
+                        if not complexity: missing.append("complexity")
+                        logger.warning(f"Skipping task due to missing fields: {', '.join(missing)}")
+                        logger.warning(f"Task content:\n{task}")
+                
+                except Exception as e:
+                    logger.error(f"Failed to parse individual task: {str(e)}")
+                    logger.error(f"Task content that caused error:\n{task}")
+                    continue
             
             logger.debug(f"Successfully parsed {len(tasks)} technical tasks")
             return tasks
@@ -339,12 +372,4 @@ class TicketParserService:
         except Exception as e:
             logger.error(f"Failed to parse technical tasks: {str(e)}")
             logger.error(f"Response that caused error:\n{response}")
-            return [{
-                "type": "Technical Task",
-                "name": "Error in technical task parsing",
-                "description": f"Failed to parse technical tasks: {str(e)}",
-                "technical_domain": "Unknown",
-                "complexity": "Medium",
-                "dependencies": [],
-                "implementation_notes": "Error during parsing"
-            }] 
+            return [] 

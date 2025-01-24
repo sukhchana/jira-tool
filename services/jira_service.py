@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from fastapi import HTTPException
 import logging
 import base64
+import ssl
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,11 @@ class JiraService:
             "Accept": "application/json"
         }
         
+        # Create SSL context that doesn't verify
+        self.ssl_context = ssl.create_default_context()
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
+        
         logger.debug(f"Initialized JIRA service for user: {email}")
 
     async def get_ticket(self, ticket_key: str) -> Dict[str, Any]:
@@ -39,7 +45,11 @@ class JiraService:
             logger.debug(f"Attempting to fetch ticket from: {url}")
             
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers) as response:
+                async with session.get(
+                    url, 
+                    headers=self.headers,
+                    ssl=self.ssl_context  # Disable SSL verification
+                ) as response:
                     if response.status == 200:
                         issue_data = await response.json()
                         fields = issue_data.get("fields", {})
@@ -71,7 +81,7 @@ class JiraService:
                             status_code=response.status,
                             detail=error_msg
                         )
-                
+                        
         except aiohttp.ClientError as e:
             error_msg = (
                 f"Failed to fetch ticket {ticket_key}:\n"
@@ -112,7 +122,12 @@ class JiraService:
             payload = {"fields": fields}
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=self.headers, json=payload) as response:
+                async with session.post(
+                    url, 
+                    headers=self.headers,
+                    json=payload,
+                    ssl=self.ssl_context  # Disable SSL verification
+                ) as response:
                     if response.status == 201:
                         issue_data = await response.json()
                         issue_key = issue_data.get("key")
@@ -137,7 +152,11 @@ class JiraService:
             url = f"{self.base_url}/project"
             
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers) as response:
+                async with session.get(
+                    url, 
+                    headers=self.headers,
+                    ssl=self.ssl_context  # Disable SSL verification
+                ) as response:
                     if response.status == 200:
                         projects = await response.json()
                         return [{

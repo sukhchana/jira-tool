@@ -9,6 +9,7 @@ import json
 from services.execution_log_service import ExecutionLogService
 from services.task_tracker import TaskTracker
 from services.validation_helper import ValidationHelper
+from services.proposed_tickets_service import ProposedTicketsService
 
 class JiraBreakdownService:
     """
@@ -99,6 +100,7 @@ class JiraBreakdownService:
         """Break down a JIRA epic into smaller tasks"""
         execution_log = ExecutionLogService(epic_key)
         task_tracker = TaskTracker(epic_key)
+        proposed_tickets = ProposedTicketsService(epic_key, execution_log.execution_id)
         
         try:
             logger.info(f"Breaking down epic: {epic_key}")
@@ -127,7 +129,8 @@ class JiraBreakdownService:
                 await self._generate_high_level_tasks(
                     epic_analysis,
                     execution_log,
-                    task_tracker
+                    task_tracker,
+                    proposed_tickets
                 )
                 
                 # Debug log task tracker state before breakdown
@@ -141,8 +144,12 @@ class JiraBreakdownService:
                     all_tasks,
                     epic_details,
                     execution_log,
-                    task_tracker
+                    task_tracker,
+                    proposed_tickets
                 )
+                
+                # Save the proposed tickets
+                proposed_tickets.save()
                 
                 # Use task tracker for summary
                 summary = task_tracker.get_summary()
@@ -152,7 +159,8 @@ class JiraBreakdownService:
                     "epic_key": epic_key,
                     "epic_summary": epic_details["summary"],
                     "analysis": epic_analysis,
-                    "tasks": task_tracker.get_all_tasks()
+                    "tasks": task_tracker.get_all_tasks(),
+                    "proposed_tickets_file": proposed_tickets.filename
                 }
                 
             except Exception as e:
@@ -205,7 +213,8 @@ class JiraBreakdownService:
         self,
         epic_analysis: Dict[str, Any],
         execution_log: ExecutionLogService,
-        task_tracker: TaskTracker
+        task_tracker: TaskTracker,
+        proposed_tickets: ProposedTicketsService
     ) -> None:
         """Generate high-level tasks based on epic analysis"""
         try:
@@ -219,6 +228,7 @@ class JiraBreakdownService:
             for story in user_stories:
                 logger.debug(f"User Story: {json.dumps(story, indent=2)}")
                 task_tracker.add_user_story(story)
+                proposed_tickets.add_high_level_task(story)
             
             # Generate Technical Tasks
             tasks_prompt = self.prompt_helper.build_technical_tasks_prompt(user_stories, epic_analysis)
@@ -230,6 +240,7 @@ class JiraBreakdownService:
             for task in technical_tasks:
                 logger.debug(f"Technical Task: {json.dumps(task, indent=2)}")
                 task_tracker.add_technical_task(task)
+                proposed_tickets.add_high_level_task(task)
             
             # Verify task tracker state
             tracker_state = task_tracker.get_summary()
@@ -278,7 +289,8 @@ class JiraBreakdownService:
         high_level_tasks: List[Dict[str, Any]],
         epic_details: Dict[str, Any],
         execution_log: ExecutionLogService,
-        task_tracker: TaskTracker
+        task_tracker: TaskTracker,
+        proposed_tickets: ProposedTicketsService
     ) -> None:
         """Break down high-level tasks into detailed subtasks."""
         try:
@@ -323,13 +335,10 @@ class JiraBreakdownService:
                     task = task_group["high_level_task"]
                     logger.info(f"Breaking down task: {task['name']} ({task['type']})")
                     
-                    # Validate task before processing
-                    if not ValidationHelper.validate_task_structure(task, task["type"]):
-                        raise ValueError(f"Invalid task structure: {json.dumps(task, indent=2)}")
-                    
                     prompt = self.prompt_helper.build_subtasks_prompt(task, epic_details)
                     response = await self.llm.generate_content(prompt)
                     
+                    # Log the subtask generation attempt
                     logger.info(f"Raw LLM response for subtasks of {task['name']}:")
                     logger.info("-" * 80)
                     logger.info(response)
@@ -337,13 +346,26 @@ class JiraBreakdownService:
                     
                     subtasks = self.parser.parse_subtasks(response)
                     
-                    # Validate subtasks
+                    # Log parsed subtasks
+                    logger.info(f"Parsed {len(subtasks)} subtasks for {task['name']}:")
                     for subtask in subtasks:
-                        if not ValidationHelper.validate_subtask_structure(subtask):
-                            raise ValueError(f"Invalid subtask structure: {json.dumps(subtask, indent=2)}")
+                        logger.info(f"- {subtask['title']} ({subtask['story_points']} points)")
+                        logger.debug(f"  Details: {json.dumps(subtask, indent=2)}")
                     
-                    logger.debug(f"Generated {len(subtasks)} valid subtasks for {task['name']}")
+                    # Add to execution log
+                    execution_log.log_section(
+                        f"Subtasks for {task['name']}", 
+                        json.dumps({
+                            "parent_task": task['name'],
+                            "parent_type": task['type'],
+                            "subtask_count": len(subtasks),
+                            "total_points": sum(st['story_points'] for st in subtasks),
+                            "subtasks": subtasks
+                        }, indent=2)
+                    )
+                    
                     task_tracker.add_subtasks(task["name"], subtasks)
+                    proposed_tickets.add_subtasks(task["name"], subtasks)
                     logger.info(f"Completed breakdown for {task['name']} - {len(subtasks)} subtasks created")
                     
                 except Exception as e:
@@ -351,7 +373,7 @@ class JiraBreakdownService:
                     logger.error(f"Task details: {json.dumps(task, indent=2)}")
                     raise
 
-            # Get final summary from task tracker
+            # Get final summary including subtasks
             tracker_summary = task_tracker.get_summary()
             total_tasks = len(high_level_tasks)
             total_subtasks = tracker_summary['subtasks']
@@ -414,6 +436,17 @@ class JiraBreakdownService:
                     f"  • Story Points: {parent_points}\n"
                     f"  • Required Skills: {', '.join(sorted(set(skill for subtask in parent_subtasks for skill in subtask.get('required_skills', []))))}\n"
                 )
+
+            # Add detailed subtask information to execution log
+            execution_log.log_section(
+                "Final Subtask Summary",
+                json.dumps({
+                    "total_high_level_tasks": total_tasks,
+                    "total_subtasks": total_subtasks,
+                    "subtasks_by_parent": tracker_summary['subtasks_by_parent'],
+                    "all_subtasks": task_tracker.subtasks
+                }, indent=2)
+            )
 
             logger.info(completion_summary)
             execution_log.log_section("Task Breakdown Completion", completion_summary)

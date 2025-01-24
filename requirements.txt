@@ -6,3 +6,10 @@ pydantic
 google-cloud-aiplatform
 vertexai
 loguru
+tenacity
+tomli
+PyYAML
+sentencepiece
+uuid7
+requests
+urllib3
