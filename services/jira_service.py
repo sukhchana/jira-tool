@@ -6,6 +6,7 @@ from fastapi import HTTPException
 import logging
 import base64
 import ssl
+from models import TicketCreateResponse, JiraProject
 
 logger = logging.getLogger(__name__)
 
@@ -97,27 +98,50 @@ class JiraService:
         description: str,
         issue_type: str,
         *,
-        labels: List[str] = None,
         parent_key: str = None,
-        story_points: int = None
-    ) -> Dict[str, str]:
-        """Create a new JIRA ticket"""
+        story_points: int = None,
+        labels: List[str] = None,
+        acceptance_criteria: str = None,
+        technical_domain: str = None,
+        epic_link: str = None,
+        priority: str = "Medium"
+    ) -> TicketCreateResponse:
+        """Create a new JIRA ticket with relationships and custom fields"""
         try:
             url = f"{self.base_url}/issue"
             
+            # Build the base fields
             fields = {
                 "project": {"key": project_key},
                 "summary": summary,
                 "description": description,
-                "issuetype": {"name": issue_type}
+                "issuetype": {"name": issue_type},
+                "priority": {"name": priority}
             }
             
+            # Add parent link for subtasks
+            if parent_key and issue_type == "Sub-task":
+                fields["parent"] = {"key": parent_key}
+            
+            # Add epic link for stories and technical tasks
+            if epic_link and issue_type in ["Story", "Task"]:
+                fields["customfield_10014"] = epic_link  # Epic Link field
+            
+            # Add story points if provided
+            if story_points is not None:
+                fields["customfield_10016"] = float(story_points)  # Story Points field
+            
+            # Add labels
             if labels:
                 fields["labels"] = labels
-            if parent_key:
-                fields["parent"] = {"key": parent_key}
-            if story_points is not None:
-                fields["customfield_10016"] = story_points
+                if technical_domain and technical_domain not in labels:
+                    fields["labels"].append(technical_domain)
+            elif technical_domain:
+                fields["labels"] = [technical_domain]
+            
+            # Add acceptance criteria if provided
+            if acceptance_criteria:
+                fields["customfield_10015"] = acceptance_criteria  # Acceptance Criteria field
             
             payload = {"fields": fields}
             
@@ -126,27 +150,30 @@ class JiraService:
                     url, 
                     headers=self.headers,
                     json=payload,
-                    ssl=self.ssl_context  # Disable SSL verification
+                    ssl=self.ssl_context
                 ) as response:
                     if response.status == 201:
                         issue_data = await response.json()
                         issue_key = issue_data.get("key")
-                        return {
-                            "status": "success",
-                            "message": "Ticket created successfully",
-                            "ticket_key": issue_key,
-                            "ticket_url": f"{os.getenv('JIRA_SERVER')}/browse/{issue_key}"
-                        }
-                    else:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=f"JIRA API Error: {await response.text()}"
+                        return TicketCreateResponse(
+                            status="success",
+                            message="Ticket created successfully",
+                            ticket_key=issue_key,
+                            ticket_url=f"{os.getenv('JIRA_SERVER')}/browse/{issue_key}"
                         )
+                    else:
+                        error_msg = (
+                            f"Failed to create JIRA ticket:\n"
+                            f"Status: {response.status}\n"
+                            f"Response: {await response.text()}"
+                        )
+                        raise HTTPException(status_code=response.status, detail=error_msg)
                     
-        except aiohttp.ClientError as e:
-            raise HTTPException(status_code=500, detail=f"Failed to create ticket: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to create ticket: {str(e)}")
+            raise
 
-    async def get_projects(self) -> List[Dict[str, str]]:
+    async def get_projects(self) -> List[JiraProject]:
         """Get list of available JIRA projects"""
         try:
             url = f"{self.base_url}/project"
@@ -155,20 +182,26 @@ class JiraService:
                 async with session.get(
                     url, 
                     headers=self.headers,
-                    ssl=self.ssl_context  # Disable SSL verification
+                    ssl=self.ssl_context
                 ) as response:
                     if response.status == 200:
                         projects = await response.json()
-                        return [{
-                            "key": project.get("key"),
-                            "name": project.get("name"),
-                            "id": project.get("id")
-                        } for project in projects]
+                        return [
+                            JiraProject(
+                                key=project.get("key"),
+                                name=project.get("name"),
+                                id=project.get("id")
+                            )
+                            for project in projects
+                        ]
                     else:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=f"JIRA API Error: {await response.text()}"
+                        error_msg = (
+                            f"Failed to fetch JIRA projects:\n"
+                            f"Status: {response.status}\n"
+                            f"Response: {await response.text()}"
                         )
+                        raise HTTPException(status_code=response.status, detail=error_msg)
                     
-        except aiohttp.ClientError as e:
-            raise HTTPException(status_code=500, detail=f"Failed to fetch projects: {str(e)}") 
+        except Exception as e:
+            logger.error(f"Failed to fetch projects: {str(e)}")
+            raise 

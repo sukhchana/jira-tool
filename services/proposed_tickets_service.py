@@ -71,8 +71,8 @@ class ProposedTicketsService:
         self.tickets_data["high_level_tasks"].append(task_data)
         return task_id
     
-    def add_subtasks(self, parent_name: str, subtasks: List[Dict[str, Any]]) -> List[str]:
-        """Add subtasks for a parent task"""
+    def add_subtasks(self, parent_name: str, subtasks: List[Dict[str, Any]], parent_id: str) -> List[str]:
+        """Add subtasks for a parent task with parent ID reference"""
         subtask_ids = []
         self.tickets_data["subtasks"][parent_name] = []
         
@@ -82,6 +82,7 @@ class ProposedTicketsService:
             
             self.tickets_data["subtasks"][parent_name].append({
                 "id": subtask_id,
+                "parent_id": parent_id,  # Add reference to parent ID
                 "title": subtask["title"],
                 "description": subtask["description"],
                 "acceptance_criteria": subtask["acceptance_criteria"],

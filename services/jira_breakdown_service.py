@@ -297,38 +297,6 @@ class JiraBreakdownService:
             # Debug log the input tasks
             logger.debug(f"Received high-level tasks for breakdown:\n{json.dumps(high_level_tasks, indent=2)}")
             
-            # Check if we have any tasks to process
-            if not high_level_tasks:
-                logger.warning("No high-level tasks to break down")
-                logger.debug(f"Current task tracker state:\n{json.dumps(task_tracker.get_summary(), indent=2)}")
-                completion_summary = (
-                    f"\nTask breakdown completed:\n"
-                    f"- Total high-level tasks processed: 0\n"
-                    f"- Total subtasks created: 0\n"
-                    f"- Average subtasks per task: 0\n"
-                )
-                logger.info(completion_summary)
-                execution_log.log_section("Task Breakdown Completion", completion_summary)
-                return
-
-            # Validate input structure
-            for task_group in high_level_tasks:
-                if not ValidationHelper.validate_task_group(task_group):
-                    raise ValueError(f"Invalid task group structure: {json.dumps(task_group, indent=2)}")
-            
-            # Log breakdown summary
-            user_stories = [t for t in high_level_tasks if t["high_level_task"]["type"] == "User Story"]
-            technical_tasks = [t for t in high_level_tasks if t["high_level_task"]["type"] == "Technical Task"]
-            
-            summary = (
-                f"\nStarting task breakdown:\n"
-                f"- Total tasks to break down: {len(high_level_tasks)}\n"
-                f"- User Stories: {len(user_stories)}\n"
-                f"- Technical Tasks: {len(technical_tasks)}\n"
-            )
-            logger.info(summary)
-            execution_log.log_section("Task Breakdown Summary", summary)
-            
             # Process each task
             for task_group in high_level_tasks:
                 try:
@@ -365,7 +333,11 @@ class JiraBreakdownService:
                     )
                     
                     task_tracker.add_subtasks(task["name"], subtasks)
-                    proposed_tickets.add_subtasks(task["name"], subtasks)
+                    proposed_tickets.add_subtasks(
+                        parent_name=task["name"],
+                        subtasks=subtasks,
+                        parent_id=task["id"]
+                    )
                     logger.info(f"Completed breakdown for {task['name']} - {len(subtasks)} subtasks created")
                     
                 except Exception as e:

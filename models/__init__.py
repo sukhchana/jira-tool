@@ -10,6 +10,10 @@ from .ticket_generation_request import TicketGenerationRequest
 from .ticket_generation_response import TicketGenerationResponse
 from .complexity_analysis_request import ComplexityAnalysisRequest
 from .complexity_analysis_response import ComplexityAnalysisResponse
+from .ticket_create_request import TicketCreateRequest
+from .ticket_create_response import TicketCreateResponse
+from .jira_ticket_details import JiraTicketDetails
+from .jira_project import JiraProject
 
 __all__ = [
     'EpicInfo',
@@ -23,5 +27,9 @@ __all__ = [
     'TicketGenerationRequest',
     'TicketGenerationResponse',
     'ComplexityAnalysisRequest',
-    'ComplexityAnalysisResponse'
+    'ComplexityAnalysisResponse',
+    'TicketCreateRequest',
+    'TicketCreateResponse',
+    'JiraTicketDetails',
+    'JiraProject'
 ]
