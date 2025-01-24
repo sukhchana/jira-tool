@@ -218,29 +218,25 @@ class JiraBreakdownService:
     ) -> None:
         """Generate high-level tasks based on epic analysis"""
         try:
-            # Generate User Stories
-            stories_prompt = self.prompt_helper.build_user_stories_prompt(epic_analysis)
-            stories_response = await self.llm.generate_content(stories_prompt, temperature=0.7)
-            user_stories = self.parser.parse_user_stories(stories_response)
-            logger.debug(f"Generated {len(user_stories)} user stories")
+            # Generate user stories first
+            prompt = self.prompt_helper.build_user_stories_prompt(epic_analysis)
+            response = await self.llm.generate_content(prompt)
+            user_stories = self.parser.parse_user_stories(response)
             
-            # Debug log each user story
+            # Add tasks to tracker and get IDs
             for story in user_stories:
-                logger.debug(f"User Story: {json.dumps(story, indent=2)}")
                 task_tracker.add_user_story(story)
-                proposed_tickets.add_high_level_task(story)
+                story["id"] = proposed_tickets.add_high_level_task(story)  # Store the returned ID
             
-            # Generate Technical Tasks
-            tasks_prompt = self.prompt_helper.build_technical_tasks_prompt(user_stories, epic_analysis)
-            tasks_response = await self.llm.generate_content(tasks_prompt, temperature=0.7)
-            technical_tasks = self.parser.parse_technical_tasks(tasks_response)
-            logger.debug(f"Generated {len(technical_tasks)} technical tasks")
+            # Generate technical tasks
+            prompt = self.prompt_helper.build_technical_tasks_prompt(user_stories, epic_analysis)
+            response = await self.llm.generate_content(prompt)
+            technical_tasks = self.parser.parse_technical_tasks(response)
             
-            # Debug log each technical task
+            # Add tasks to tracker and get IDs
             for task in technical_tasks:
-                logger.debug(f"Technical Task: {json.dumps(task, indent=2)}")
                 task_tracker.add_technical_task(task)
-                proposed_tickets.add_high_level_task(task)
+                task["id"] = proposed_tickets.add_high_level_task(task)  # Store the returned ID
             
             # Verify task tracker state
             tracker_state = task_tracker.get_summary()
@@ -260,8 +256,8 @@ class JiraBreakdownService:
             # Log interactions with more detail
             execution_log.log_llm_interaction(
                 "User Stories Generation",
-                stories_prompt,
-                stories_response,
+                prompt,
+                response,
                 {
                     "generated_stories": len(user_stories),
                     "stories": user_stories
@@ -269,8 +265,8 @@ class JiraBreakdownService:
             )
             execution_log.log_llm_interaction(
                 "Technical Tasks Generation",
-                tasks_prompt,
-                tasks_response,
+                prompt,
+                response,
                 {
                     "generated_tasks": len(technical_tasks),
                     "tasks": technical_tasks
@@ -336,7 +332,7 @@ class JiraBreakdownService:
                     proposed_tickets.add_subtasks(
                         parent_name=task["name"],
                         subtasks=subtasks,
-                        parent_id=task["id"]
+                        parent_id=task["id"]  # Access ID directly from task
                     )
                     logger.info(f"Completed breakdown for {task['name']} - {len(subtasks)} subtasks created")
                     

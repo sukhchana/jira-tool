@@ -19,18 +19,19 @@ class ProposedTicketsService:
             "USER-STORY": 0,
             "TECHNICAL-TASK": 0,
             "SUB-TASK": 0,
-            "SCENARIO": 0  # Add counter for scenarios
+            "SCENARIO": 0
         }
         
         # Ensure directory exists
         os.makedirs("proposed_tickets", exist_ok=True)
         
-        # Initialize the YAML structure
+        # Initialize the YAML structure with separate lists
         self.tickets_data = {
             "execution_id": execution_id,
             "epic_key": epic_key,
             "timestamp": datetime.now().isoformat(),
-            "high_level_tasks": [],
+            "user_stories": [],  # Separate list for user stories
+            "technical_tasks": [],  # Separate list for technical tasks
             "subtasks": {}
         }
     
@@ -39,10 +40,11 @@ class ProposedTicketsService:
         self.id_counters[type_prefix] += 1
         return f"{type_prefix}-{self.id_counters[type_prefix]}"
     
-    def add_high_level_task(self, task: Dict[str, Any]) -> None:
+    def add_high_level_task(self, task: Dict[str, Any]) -> str:
         """Add a high-level task (user story or technical task)"""
         # Determine task type and generate ID
-        type_prefix = "USER-STORY" if task["type"] == "User Story" else "TECHNICAL-TASK"
+        is_user_story = task["type"] == "User Story"
+        type_prefix = "USER-STORY" if is_user_story else "TECHNICAL-TASK"
         task_id = self._generate_id(type_prefix)
         
         task_data = {
@@ -54,11 +56,12 @@ class ProposedTicketsService:
             "complexity": task["complexity"],
             "dependencies": task["dependencies"],
             "business_value": task.get("business_value"),
-            "implementation_notes": task.get("implementation_notes")
+            "implementation_notes": task.get("implementation_notes"),
+            "parent_id": self.epic_key
         }
         
         # Add scenarios for user stories with IDs
-        if task["type"] == "User Story" and "scenarios" in task:
+        if is_user_story and "scenarios" in task:
             task_data["scenarios"] = [
                 {
                     "id": self._generate_id("SCENARIO"),
@@ -68,7 +71,12 @@ class ProposedTicketsService:
                 for scenario in task["scenarios"]
             ]
         
-        self.tickets_data["high_level_tasks"].append(task_data)
+        # Add to appropriate list
+        if is_user_story:
+            self.tickets_data["user_stories"].append(task_data)
+        else:
+            self.tickets_data["technical_tasks"].append(task_data)
+            
         return task_id
     
     def add_subtasks(self, parent_name: str, subtasks: List[Dict[str, Any]], parent_id: str) -> List[str]:
