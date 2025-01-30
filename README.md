@@ -159,6 +159,115 @@ The API will be available at `http://localhost:8000`
   - Query parameter: `create_in_jira` (boolean)
   - Response: `EpicBreakdownResponse`
 
+## Revision Flow
+
+The application supports a structured workflow for revising execution plans:
+
+### 1. Request Revision
+**Endpoint:** `POST /revise-plan/`
+- User submits revision request with:
+  - `execution_id`: Original execution plan ID
+  - `revision_request`: Free-text description of desired changes
+- System uses LLM to interpret and structure the request
+- Returns a `temp_revision_id` and interpreted changes for confirmation
+
+### 2. Confirm Interpretation
+**Endpoint:** `POST /confirm-revision-request/{temp_revision_id}`
+- User reviews the LLM's interpretation
+- Accepts or rejects the interpretation
+- System tracks the decision in SQLite database
+- Status updated to ACCEPTED/REJECTED
+
+### 3. Apply Changes
+**Endpoint:** `POST /apply-revision/{temp_revision_id}`
+- Only proceeds if revision was accepted
+- Generates new execution plan with changes
+- Creates new files with updated content
+- Links new execution to original via parent relationship
+
+### Database Structure
+
+The system uses SQLite to track executions and revisions:
+
+```sql
+-- Track execution plans
+CREATE TABLE executions (
+    execution_id TEXT PRIMARY KEY,
+    epic_key TEXT NOT NULL,
+    execution_plan_file TEXT NOT NULL,
+    proposed_plan_file TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    parent_execution_id TEXT,
+    FOREIGN KEY (parent_execution_id) REFERENCES executions (execution_id)
+);
+
+-- Track revision requests and their status
+CREATE TABLE revisions (
+    revision_id TEXT PRIMARY KEY,
+    execution_id TEXT NOT NULL,
+    proposed_plan_file TEXT NOT NULL,
+    execution_plan_file TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    changes_requested TEXT NOT NULL,
+    changes_interpreted TEXT NOT NULL,
+    accepted BOOLEAN,
+    accepted_at TIMESTAMP,
+    FOREIGN KEY (execution_id) REFERENCES executions (execution_id)
+);
+```
+
+### File Organization
+
+The system maintains several types of files:
+- **Execution Plans**: `execution_plans/EXECUTION_{epic_key}_{timestamp}.md`
+  - Contains the detailed execution plan
+  - Linked to parent plan for revision tracking
+
+- **Proposed Tickets**: `proposed_tickets/PROPOSED_{epic_key}_{timestamp}.yaml`
+  - Contains structured ticket definitions
+  - Maintains consistency with execution plan
+
+- **Database**: `data/execution_tracker.db`
+  - SQLite database tracking all relationships
+  - Stores execution and revision history
+
+### Revision States
+
+A revision can be in one of these states:
+- `PENDING`: Initial state when revision is requested
+- `ACCEPTED`: User confirmed the interpretation
+- `REJECTED`: User rejected the interpretation
+- `APPLIED`: Changes have been applied to create new plan
+
+### Example Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API
+    participant LLM
+    participant DB
+    participant Files
+
+    User->>API: POST /revise-plan/
+    API->>LLM: Interpret revision request
+    LLM-->>API: Structured interpretation
+    API->>DB: Store revision (PENDING)
+    API-->>User: Return temp_revision_id
+
+    User->>API: POST /confirm-revision-request/
+    API->>DB: Update status (ACCEPTED/REJECTED)
+    API-->>User: Confirmation response
+
+    User->>API: POST /apply-revision/
+    API->>DB: Check acceptance
+    API->>Files: Generate new plans
+    API->>DB: Create new execution record
+    API-->>User: Return new execution details
+```
+
 ## Logging
 
 The application uses Loguru for logging:

@@ -6,3 +6,10 @@ s-chana-4d89d57ae610.json
 __pycache__/
 .idea/
 logs/
+
+# Database
+/data/*.db
+/data/*.db-journal
+
+# But keep the directory
+!/data/.gitkeep

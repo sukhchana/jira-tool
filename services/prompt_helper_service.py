@@ -11,7 +11,7 @@ class PromptHelperService:
     ) -> str:
         """Build prompt for ticket description generation"""
         prompt_parts = [
-            "Please help me create a well-structured JIRA ticket description with the following information:\n\n",
+            "Please create a well-structured JIRA ticket with the following information:\n\n",
             f"Context: {context}\n"
         ]
         
@@ -24,12 +24,45 @@ class PromptHelperService:
                 prompt_parts.append(f"- {key}: {value}\n")
                 
         prompt_parts.append("""
-Please format the response as follows:
-1. Summary: A brief, clear title for the ticket
-2. Description: Detailed explanation of the task/issue
-3. Acceptance Criteria: Clear, testable criteria for completion
-4. Technical Notes: Any technical considerations or implementation details
-        """)
+Please format the response using EXACTLY this structure:
+
+<ticket>
+Title: [Clear, concise title]
+Description: [Detailed description of the work required]
+
+Technical Domain: [Primary technical area]
+Required Skills: [Comma-separated list of key technical skills needed]
+Story Points: [1-5]
+Suggested Assignee: [Role/specialty of ideal assignee]
+Complexity: [Low/Medium/High]
+
+Acceptance Criteria:
+[List of specific, testable criteria]
+
+Scenarios:
+Scenario: [Happy path scenario name]
+Given [initial context]
+When [action is taken]
+Then [expected outcome]
+And [additional outcome if needed]
+
+Scenario: [Alternative/error path name]
+Given [initial context]
+When [action is taken]
+Then [expected outcome]
+
+Technical Notes:
+[Implementation details, architectural considerations, etc.]
+</ticket>
+
+Requirements:
+- Title should be clear and actionable
+- Description should provide comprehensive context
+- Include at least 2 Gherkin scenarios (happy path and error case)
+- Story points should reflect complexity (1-5 scale)
+- Required skills should be specific technologies/frameworks
+- Technical notes should include implementation guidance
+""")
         
         return "".join(prompt_parts)
 

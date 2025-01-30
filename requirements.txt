@@ -13,3 +13,4 @@ sentencepiece
 uuid7
 requests
 urllib3
+tabulate

@@ -9,46 +9,103 @@ class TicketParserService:
     """Service for parsing LLM responses related to JIRA tickets"""
 
     @staticmethod
-    def parse_ticket_description(response_text: str) -> Dict[str, str]:
+    def parse_ticket_description(response_text: str) -> Dict[str, Any]:
         """Parse the LLM response for ticket description into structured format"""
         logger.debug("Starting to parse ticket description")
-        sections = {
-            "summary": "",
-            "description": "",
-            "acceptance_criteria": "",
-            "technical_notes": ""
-        }
         
         try:
-            current_section = None
-            lines = response_text.split("\n")
+            # Extract the ticket content between tags
+            ticket_match = re.search(r'<ticket>(.*?)</ticket>', response_text, re.DOTALL)
+            if not ticket_match:
+                raise ValueError("No ticket content found between <ticket> tags")
+                
+            content = ticket_match.group(1)
             
-            for line in lines:
-                line = line.strip()
-                lower_line = line.lower()
+            # Initialize the structured response
+            ticket = {
+                "title": "",
+                "description": "",
+                "technical_domain": "",
+                "required_skills": [],
+                "story_points": 0,
+                "suggested_assignee": "",
+                "complexity": "",
+                "acceptance_criteria": [],
+                "scenarios": [],
+                "technical_notes": ""
+            }
+            
+            # Extract basic fields
+            title_match = re.search(r'Title:\s*(.+?)(?=\n|$)', content)
+            if title_match:
+                ticket["title"] = title_match.group(1).strip()
                 
-                if "summary:" in lower_line:
-                    current_section = "summary"
-                    continue
-                elif "description:" in lower_line:
-                    current_section = "description"
-                    continue
-                elif "acceptance criteria:" in lower_line:
-                    current_section = "acceptance_criteria"
-                    continue
-                elif "technical notes:" in lower_line:
-                    current_section = "technical_notes"
-                    continue
+            desc_match = re.search(r'Description:\s*(.+?)(?=\nTechnical Domain:|$)', content, re.DOTALL)
+            if desc_match:
+                ticket["description"] = desc_match.group(1).strip()
                 
-                if current_section and line:
-                    sections[current_section] += line + "\n"
+            domain_match = re.search(r'Technical Domain:\s*(.+?)(?=\n|$)', content)
+            if domain_match:
+                ticket["technical_domain"] = domain_match.group(1).strip()
                 
-            result = {k: v.strip() for k, v in sections.items()}
+            skills_match = re.search(r'Required Skills:\s*(.+?)(?=\n|$)', content)
+            if skills_match:
+                ticket["required_skills"] = [s.strip() for s in skills_match.group(1).split(",")]
+                
+            points_match = re.search(r'Story Points:\s*(\d+)', content)
+            if points_match:
+                ticket["story_points"] = int(points_match.group(1))
+                
+            assignee_match = re.search(r'Suggested Assignee:\s*(.+?)(?=\n|$)', content)
+            if assignee_match:
+                ticket["suggested_assignee"] = assignee_match.group(1).strip()
+                
+            complexity_match = re.search(r'Complexity:\s*(.+?)(?=\n|$)', content)
+            if complexity_match:
+                ticket["complexity"] = complexity_match.group(1).strip()
+            
+            # Extract acceptance criteria
+            ac_section = re.search(r'Acceptance Criteria:\s*\n(.*?)(?=\n\s*Scenarios:|$)', content, re.DOTALL)
+            if ac_section:
+                criteria = ac_section.group(1).strip().split('\n')
+                ticket["acceptance_criteria"] = [c.strip('- ').strip() for c in criteria if c.strip()]
+            
+            # Extract Gherkin scenarios
+            scenarios_section = re.search(r'Scenarios:(.*?)(?=\nTechnical Notes:|$)', content, re.DOTALL)
+            if scenarios_section:
+                scenario_blocks = re.finditer(r'Scenario:.*?(?=Scenario:|$)', scenarios_section.group(1), re.DOTALL)
+                for block in scenario_blocks:
+                    scenario = {
+                        "name": "",
+                        "steps": []
+                    }
+                    
+                    # Get scenario name
+                    name_match = re.search(r'Scenario:\s*(.+?)(?=\n|$)', block.group(0))
+                    if name_match:
+                        scenario["name"] = name_match.group(1).strip()
+                    
+                    # Get steps
+                    steps = re.finditer(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', block.group(0))
+                    for step in steps:
+                        scenario["steps"].append({
+                            "keyword": step.group(1),
+                            "text": step.group(2).strip()
+                        })
+                    
+                    ticket["scenarios"].append(scenario)
+            
+            # Extract technical notes
+            tech_notes_match = re.search(r'Technical Notes:\s*\n(.*?)(?=\n<\/ticket>|$)', content, re.DOTALL)
+            if tech_notes_match:
+                ticket["technical_notes"] = tech_notes_match.group(1).strip()
+            
             logger.debug("Successfully parsed ticket description")
-            return result
+            return ticket
             
         except Exception as e:
             logger.error(f"Error parsing ticket description: {str(e)}")
+            logger.error(f"Response text:\n{response_text}")
             raise
 
     @staticmethod

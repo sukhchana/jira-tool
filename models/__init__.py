@@ -14,6 +14,9 @@ from .ticket_create_request import TicketCreateRequest
 from .ticket_create_response import TicketCreateResponse
 from .jira_ticket_details import JiraTicketDetails
 from .jira_project import JiraProject
+from .revision_request import RevisionRequest, RevisionConfirmation, RevisionResponse
+from .execution_record import ExecutionRecord
+from .revision_record import RevisionRecord
 
 __all__ = [
     'EpicInfo',
@@ -31,5 +34,10 @@ __all__ = [
     'TicketCreateRequest',
     'TicketCreateResponse',
     'JiraTicketDetails',
-    'JiraProject'
+    'JiraProject',
+    'RevisionRequest',
+    'RevisionConfirmation',
+    'RevisionResponse',
+    'ExecutionRecord',
+    'RevisionRecord'
 ]

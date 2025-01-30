@@ -10,7 +10,8 @@ from services.execution_log_service import ExecutionLogService
 from services.task_tracker import TaskTracker
 from services.validation_helper import ValidationHelper
 from services.proposed_tickets_service import ProposedTicketsService
-
+from services.execution_tracker_service import ExecutionTrackerService
+from uuid_extensions import uuid7
 class JiraBreakdownService:
     """
     Service responsible for orchestrating the breakdown of JIRA epics into smaller tasks.
@@ -36,6 +37,7 @@ class JiraBreakdownService:
         self.llm = VertexLLM()
         self.prompt_helper = PromptHelperService()
         self.parser = TicketParserService()
+        self.execution_tracker = ExecutionTrackerService()
         logger.info("Successfully initialized all required services")
 
     async def generate_ticket_description(
@@ -98,9 +100,10 @@ class JiraBreakdownService:
 
     async def break_down_epic(self, epic_key: str) -> Dict[str, Any]:
         """Break down a JIRA epic into smaller tasks"""
+        execution_id = str(uuid7())
         execution_log = ExecutionLogService(epic_key)
         task_tracker = TaskTracker(epic_key)
-        proposed_tickets = ProposedTicketsService(epic_key, execution_log.execution_id)
+        proposed_tickets = ProposedTicketsService(epic_key, execution_id)
         
         try:
             logger.info(f"Breaking down epic: {epic_key}")
@@ -155,11 +158,22 @@ class JiraBreakdownService:
                 summary = task_tracker.get_summary()
                 execution_log.log_summary(summary)
                 
+                # Track the execution
+                await self.execution_tracker.create_execution_record(
+                    execution_id=execution_id,
+                    epic_key=epic_key,
+                    execution_plan_file=execution_log.filename,
+                    proposed_plan_file=proposed_tickets.filename,
+                    status="ACTIVE"
+                )
+                
                 return {
+                    "execution_id": execution_id,
                     "epic_key": epic_key,
                     "epic_summary": epic_details["summary"],
                     "analysis": epic_analysis,
                     "tasks": task_tracker.get_all_tasks(),
+                    "execution_plan_file": execution_log.filename,
                     "proposed_tickets_file": proposed_tickets.filename
                 }
                 
@@ -168,6 +182,16 @@ class JiraBreakdownService:
                 error_summary = task_tracker.get_summary()
                 error_summary["errors"] = [str(e)]
                 execution_log.log_summary(error_summary)
+                
+                # Save failed execution record
+                await self.execution_tracker.create_execution_record(
+                    execution_id=execution_id,
+                    epic_key=epic_key,
+                    execution_plan_file=execution_log.filename,
+                    proposed_plan_file=proposed_tickets.filename,
+                    status="FAILED"
+                )
+                
                 logger.error(f"Failed during task generation: {str(e)}")
                 logger.error("Tasks structure at time of error:")
                 logger.error(json.dumps(task_tracker.get_all_tasks() if 'tasks' in locals() else "No tasks generated", indent=2))
@@ -177,12 +201,25 @@ class JiraBreakdownService:
                     "epic_summary": epic_details["summary"],
                     "analysis": epic_analysis,
                     "error": str(e),
-                    "tasks": []
+                    "tasks": [],
+                    "execution_id": execution_id,  # Add execution_id to error response
+                    "status": "FAILED"
                 }
                 
         except Exception as e:
+            # Fatal error during setup or epic retrieval
             execution_log.log_section("Fatal Error", str(e))
-            logger.error(f"Failed to break down epic: {str(e)}")
+            
+            # Save fatal error execution record
+            await self.execution_tracker.create_execution_record(
+                execution_id=execution_id,
+                epic_key=epic_key,
+                execution_plan_file=execution_log.filename,
+                proposed_plan_file="",  # No proposed tickets in fatal error
+                status="FATAL_ERROR"
+            )
+            
+            logger.error(f"Fatal error breaking down epic: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to break down epic: {str(e)}"

@@ -3,8 +3,48 @@ import os
 from typing import Optional, Dict, Any
 from loguru import logger
 import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
+from vertexai.generative_models import GenerativeModel, GenerationConfig, SafetySetting, HarmCategory, HarmBlockThreshold
 from google.oauth2 import service_account
+
+def get_safety_settings():
+    """Get permissive safety settings for Vertex AI"""
+    safety_config = [
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        ),
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        ),
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        ),
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        ),
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        ),
+        SafetySetting(
+            category=HarmCategory.HARM_CATEGORY_UNSPECIFIED,
+            threshold=HarmBlockThreshold.BLOCK_NONE,
+        )
+    ]
+    return safety_config
+
+    # ]
+    # return {
+    #     HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    #     HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    #     HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+    #     HarmCategory.SEXUAL_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+
+        
+    # }
 
 class VertexLLM:
     """Interface for Google Cloud's Vertex AI Gemini service using the official SDK"""
@@ -84,10 +124,11 @@ class VertexLLM:
             model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
             self.model = GenerativeModel(model_version)
 
-            # Generate content using the model
+            # Generate content using the model with safety settings
             response = self.model.generate_content(
                 prompt,
                 generation_config=generation_config,
+                safety_settings=get_safety_settings(),
                 **kwargs
             )
             
