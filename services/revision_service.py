@@ -2,15 +2,20 @@ from typing import Dict, Any, Optional, List
 from uuid_extensions import uuid7
 from loguru import logger
 import json
-import os
 from datetime import datetime
 from llm.vertexllm import VertexLLM
 from dataclasses import dataclass
-import yaml
 from services.execution_log_service import ExecutionLogService
-from services.proposed_tickets_service import ProposedTicketsService
+from services.mongodb_service import MongoDBService
 from models.revision_request import RevisionRequest
 from models.revision_record import RevisionRecord
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder for datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 @dataclass
 class RevisionDetails:
@@ -31,12 +36,13 @@ class RevisionService:
         """Initialize the revision service"""
         self.epic_key = epic_key
         self.execution_log = ExecutionLogService(epic_key)
-        self.proposed_tickets = ProposedTicketsService()
+        self.mongodb = MongoDBService()
         self.llm = VertexLLM()
     
     async def create_revision(
         self,
         execution_id: str,
+        ticket_id: str,
         changes_requested: str,
         changes_interpreted: str
     ) -> RevisionRecord:
@@ -44,14 +50,14 @@ class RevisionService:
         try:
             revision_id = str(uuid7())
             
-            # Create new execution log and proposed tickets files for this revision
+            # Create new execution log for this revision
             self.execution_log = ExecutionLogService(self.epic_key)
-            self.proposed_tickets = ProposedTicketsService()
             
             revision = RevisionRecord(
                 revision_id=revision_id,
                 execution_id=execution_id,
-                proposed_plan_file=self.proposed_tickets.filename,
+                ticket_id=ticket_id,
+                proposed_plan_file="",  # No longer using files
                 execution_plan_file=self.execution_log.filename,
                 status="PENDING",
                 created_at=datetime.now(),
@@ -59,16 +65,22 @@ class RevisionService:
                 changes_interpreted=changes_interpreted
             )
             
-            # Log the revision details
+            # Store revision in MongoDB
+            revision_data = revision.model_dump()
+            self.mongodb.create_revision(revision_data)
+            
+            # Log the revision details using the custom encoder
             self.execution_log.log_section(
                 "Revision Details",
                 json.dumps({
                     "revision_id": revision_id,
                     "execution_id": execution_id,
+                    "ticket_id": ticket_id,
                     "changes_requested": changes_requested,
                     "changes_interpreted": changes_interpreted,
-                    "status": "PENDING"
-                }, indent=2)
+                    "status": "PENDING",
+                    "created_at": datetime.now()
+                }, indent=2, cls=DateTimeEncoder)
             )
             
             return revision
@@ -79,8 +91,9 @@ class RevisionService:
     
     async def get_revision_record(self, revision_id: str) -> Optional[RevisionRecord]:
         """Get a revision record by ID"""
-        # In the file-based system, we'll need to implement this differently
-        # For now, return None as we don't have a way to look up old revisions
+        revision_data = self.mongodb.get_revision(revision_id)
+        if revision_data:
+            return RevisionRecord(**revision_data)
         return None
     
     async def update_revision_status(
@@ -91,14 +104,20 @@ class RevisionService:
     ) -> None:
         """Update the status of a revision"""
         try:
+            # Update in MongoDB
+            updated = self.mongodb.update_revision_status(revision_id, status, accepted)
+            if not updated:
+                raise ValueError(f"Revision {revision_id} not found")
+            
             # Log the status update
             self.execution_log.log_section(
                 "Revision Status Update",
                 json.dumps({
                     "revision_id": revision_id,
                     "status": status,
-                    "accepted": accepted
-                }, indent=2)
+                    "accepted": accepted,
+                    "updated_at": datetime.now()
+                }, indent=2, cls=DateTimeEncoder)
             )
             
         except Exception as e:
@@ -108,23 +127,23 @@ class RevisionService:
     async def interpret_revision_request(
         self,
         execution_id: str,
+        ticket_id: str,
         revision_request: str
     ) -> str:
-        """Have LLM interpret the revision request"""
+        """Have LLM interpret the revision request for a single ticket"""
         try:
-            # Add debug logging to see what we're loading
-            logger.debug(f"Loading proposed tickets for execution: {execution_id}")
+            # Get the specific ticket from MongoDB
+            target_ticket = self.mongodb.get_ticket_by_execution_and_id(execution_id, ticket_id)
             
-            # Load the original proposed tickets
-            original_tickets = await self._load_proposed_tickets(execution_id)
-            logger.debug(f"Loaded tickets: {original_tickets}")
+            if not target_ticket:
+                raise ValueError(f"Ticket {ticket_id} not found in execution {execution_id}")
             
-            # Build the prompt with more context
+            # Build the prompt with the single ticket
             prompt = f"""
-            Please interpret and structure the following revision request for a JIRA ticket structure.
+            Please interpret and structure the following revision request for a single JIRA ticket.
             
-            Current Ticket Structure:
-            {yaml.dump(original_tickets, sort_keys=False)}
+            Current Ticket:
+            {json.dumps(target_ticket.model_dump(), indent=2, cls=DateTimeEncoder)}
             
             User's Revision Request:
             {revision_request}
@@ -139,19 +158,16 @@ class RevisionService:
             ...
 
             Impact Analysis:
-            - Tasks Affected: [List affected tasks]
-            - New Tasks Required: [Yes/No, with details]
-            - Dependencies Modified: [Yes/No, with details]
+            - Fields to Modify: [List fields that need to be changed]
+            - Dependencies Affected: [Yes/No, with details]
+            - Related Tickets Impact: [List any related tickets that might be affected]
             
             Implementation Plan:
             [Step by step plan for implementing these changes]
             </interpretation>
             """
             
-            # Log the prompt for debugging
-            logger.debug(f"Generated prompt: {prompt}")
-            
-            # Get response - already returns text string
+            # Get response
             response = await self.llm.generate_content(
                 prompt,
                 temperature=0.2,
@@ -159,16 +175,13 @@ class RevisionService:
                 top_k=40
             )
             
-            # Log the response
-            logger.debug(f"LLM Response: {response}")
-            
             return response
             
         except Exception as e:
             logger.error(f"Failed to interpret revision request: {str(e)}")
             logger.error(f"Execution ID: {execution_id}")
+            logger.error(f"Ticket ID: {ticket_id}")
             logger.error(f"Revision request: {revision_request}")
-            logger.error(f"Original tickets: {original_tickets if 'original_tickets' in locals() else 'Not loaded'}")
             raise
 
     async def _load_proposed_tickets(self, execution_id: str) -> Dict[str, Any]:

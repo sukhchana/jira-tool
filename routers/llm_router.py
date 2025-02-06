@@ -20,6 +20,7 @@ from loguru import logger
 from datetime import datetime
 import os
 import yaml
+from services.mongodb_service import MongoDBService
 
 router = APIRouter()
 
@@ -104,10 +105,14 @@ async def create_epic_subtasks(
     
     return breakdown 
 
-@router.post("/revise-plan/")
-async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmation:
+@router.post("/revise-plan/{execution_id}/ticket/{ticket_id}")
+async def request_plan_revision(
+    execution_id: str,
+    ticket_id: str,
+    request: RevisionRequest
+) -> RevisionConfirmation:
     try:
-        logger.info(f"Received revision request for execution: {request.execution_id}")
+        logger.info(f"Received revision request for execution: {execution_id}, ticket: {ticket_id}")
         logger.debug(f"Request data: {request.model_dump()}")
         
         # Validate the request has content
@@ -117,23 +122,18 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
                 detail="Revision request cannot be empty"
             )
         
-        # Find the epic key from the proposed tickets file
-        proposed_dir = "proposed_tickets"
-        epic_key = None
-        for filename in os.listdir(proposed_dir):
-            if filename.endswith(".yaml"):
-                filepath = os.path.join(proposed_dir, filename)
-                with open(filepath, 'r') as f:
-                    content = yaml.safe_load(f)
-                    if content.get('execution_id') == request.execution_id:
-                        epic_key = content.get('epic_key')
-                        break
+        # Initialize MongoDB service and get the specific ticket
+        mongodb_service = MongoDBService()
+        target_ticket = mongodb_service.get_ticket_by_execution_and_id(execution_id, ticket_id)
         
-        if not epic_key:
+        if not target_ticket:
             raise HTTPException(
                 status_code=404,
-                detail=f"No execution found with ID: {request.execution_id}"
+                detail=f"Ticket {ticket_id} not found in execution {execution_id}"
             )
+        
+        # Get epic key from the ticket
+        epic_key = target_ticket.epic_key
         
         # Initialize revision service with epic key
         revision_service = RevisionService(epic_key)
@@ -144,7 +144,8 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
         # Add more logging
         logger.debug("Calling interpret_revision_request...")
         interpreted_changes = await revision_service.interpret_revision_request(
-            execution_id=request.execution_id,
+            execution_id=execution_id,
+            ticket_id=ticket_id,
             revision_request=request.revision_request
         )
         
@@ -152,13 +153,15 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
         
         # Create revision record
         revision = await revision_service.create_revision(
-            execution_id=request.execution_id,
+            execution_id=execution_id,
+            ticket_id=ticket_id,
             changes_requested=request.revision_request,
             changes_interpreted=interpreted_changes
         )
         
         return RevisionConfirmation(
-            original_execution_id=request.execution_id,
+            original_execution_id=execution_id,
+            ticket_id=ticket_id,
             interpreted_changes=interpreted_changes,
             temp_revision_id=revision.revision_id
         )
@@ -179,7 +182,10 @@ async def confirm_revision_request(
 ) -> RevisionConfirmation:
     """Confirm whether the interpreted changes are correct"""
     try:
-        # Find the epic key from the execution plan file
+        # Initialize MongoDB service
+        mongodb_service = MongoDBService()
+        
+        # Find the execution plan file that contains this revision ID
         execution_plans_dir = "execution_plans"
         epic_key = None
         for filename in os.listdir(execution_plans_dir):

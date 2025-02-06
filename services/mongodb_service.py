@@ -1,13 +1,14 @@
 import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Add project root to Python path when running independently
 if __name__ == "__main__":
     project_root = str(Path(__file__).parent.parent)
     sys.path.insert(0, project_root)
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from models.proposed_ticket_mongo import ProposedTicketMongo
@@ -30,18 +31,22 @@ class MongoDBService:
         self.client = MongoClient(connection_string)
         self.db = self.client.jira_tool
         self.proposed_tickets: Collection = self.db.proposed_tickets
+        self.revisions: Collection = self.db.revisions
         
         # Create indexes
         self._setup_indexes()
     
     def _setup_indexes(self):
         """Setup necessary indexes for the collections"""
-        # Index for faster lookups by proposal_id
+        # Indexes for proposed_tickets collection
         self.proposed_tickets.create_index("proposal_id")
-        # Index for faster lookups by epic_key and execution_id
         self.proposed_tickets.create_index([("epic_key", 1), ("execution_id", 1)])
-        # Index for faster lookups by parent_id within a proposal
         self.proposed_tickets.create_index([("proposal_id", 1), ("parent_id", 1)])
+        
+        # Indexes for revisions collection
+        self.revisions.create_index("revision_id", unique=True)
+        self.revisions.create_index([("execution_id", 1), ("ticket_id", 1)])
+        self.revisions.create_index("status")
     
     def persist_proposed_tickets_from_yaml(self, yaml_file_path: str) -> List[str]:
         """
@@ -170,7 +175,49 @@ class MongoDBService:
             "proposal_id": proposal_id,
             "parent_id": parent_id
         })
-        return [ProposedTicketMongo(**doc) for doc in cursor] 
+        return [ProposedTicketMongo(**doc) for doc in cursor]
+    
+    def get_tickets_by_execution_id(self, execution_id: str) -> List[ProposedTicketMongo]:
+        """Get all tickets for a given execution ID"""
+        cursor = self.proposed_tickets.find({"execution_id": execution_id})
+        return [ProposedTicketMongo(**doc) for doc in cursor]
+
+    def get_ticket_by_execution_and_id(self, execution_id: str, ticket_id: str) -> Optional[ProposedTicketMongo]:
+        """Get a specific ticket by execution ID and ticket ID"""
+        doc = self.proposed_tickets.find_one({
+            "execution_id": execution_id,
+            "ticket_id": ticket_id
+        })
+        return ProposedTicketMongo(**doc) if doc else None
+
+    def create_revision(self, revision: Dict[str, Any]) -> str:
+        """Create a new revision record in MongoDB"""
+        result = self.revisions.insert_one(revision)
+        return str(result.inserted_id)
+    
+    def get_revision(self, revision_id: str) -> Optional[Dict[str, Any]]:
+        """Get a revision record by ID"""
+        return self.revisions.find_one({"revision_id": revision_id})
+    
+    def update_revision_status(self, revision_id: str, status: str, accepted: Optional[bool] = None) -> bool:
+        """Update the status of a revision"""
+        update_data = {
+            "status": status,
+            "updated_at": datetime.now()
+        }
+        if accepted is not None:
+            update_data["accepted"] = accepted
+            update_data["accepted_at"] = datetime.now()
+            
+        result = self.revisions.update_one(
+            {"revision_id": revision_id},
+            {"$set": update_data}
+        )
+        return result.modified_count > 0
+    
+    def get_revisions_by_execution_id(self, execution_id: str) -> List[Dict[str, Any]]:
+        """Get all revisions for a given execution"""
+        return list(self.revisions.find({"execution_id": execution_id}))
 
 if __name__ == "__main__":
     try:

@@ -1,15 +1,13 @@
 from pydantic import BaseModel, Field
 
 class RevisionRequest(BaseModel):
-    """Request model for proposing changes to an execution plan"""
-    execution_id: str = Field(..., description="UUID of the execution to revise")
-    revision_request: str = Field(..., min_length=1, description="Description of the requested changes")
+    """Model for requesting a revision to a ticket"""
+    revision_request: str = Field(..., description="Description of the requested changes to the ticket")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "execution_id": "01HMW123ABC...",
-                "revision_request": "Please add a new task for unit testing"
+                "revision_request": "Please add error handling to the acceptance criteria"
             }
         }
 
