@@ -17,15 +17,16 @@ class ResponseFormatterService:
         """Format epic breakdown response"""
         try:
             return JiraEpicBreakdownResult(
+                execution_id=result["execution_id"],
+                epic_key=result["epic_key"],
+                epic_summary=result["epic_summary"],
+                analysis=result["analysis"],
+                tasks=result["tasks"],
+                execution_plan_file=result["execution_plan_file"],
+                proposed_tickets_file=result["proposed_tickets_file"],
                 epic=EpicInfo(
                     key=result["epic_key"],
                     summary=result["epic_summary"]
-                ),
-                analysis=AnalysisInfo(
-                    main_objective=result["analysis"].get("main_objective", ""),
-                    technical_domains=result["analysis"].get("technical_domains", []),
-                    core_requirements=result["analysis"].get("core_requirements", []),
-                    stakeholders=result["analysis"].get("stakeholders", [])
                 ),
                 breakdown=BreakdownInfo(
                     execution_plan={

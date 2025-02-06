@@ -42,6 +42,17 @@ class ExecutionLogService:
     def log_llm_interaction(self, stage: str, prompt: str, response: str, parsed_result: Dict[str, Any] = None):
         """Log an LLM interaction including prompt, response, and parsed results"""
         try:
+            # Log to console
+            logger.info(f"\n=== {stage} ===")
+            logger.info("\nPrompt:")
+            logger.info(f"{prompt}")
+            logger.info("\nRaw Response:")
+            logger.info(f"{response}")
+            if parsed_result:
+                logger.info("\nParsed Result:")
+                logger.info(json.dumps(parsed_result, indent=2))
+
+            # Log to file
             with open(self.filename, "a") as f:
                 f.write(f"\n## {stage}\n\n")
                 

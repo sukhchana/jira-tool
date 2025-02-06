@@ -4,7 +4,6 @@ from services.jira_breakdown_service import JiraBreakdownService
 from services.jira_orchestration_service import JiraOrchestrationService
 from services.response_formatter_service import ResponseFormatterService
 from services.revision_service import RevisionService
-from config.database import DATABASE
 from uuid_extensions import uuid7
 from models import (
     TicketGenerationRequest,
@@ -19,13 +18,10 @@ from models import (
 )
 from loguru import logger
 from datetime import datetime
-import sqlite3
+import os
+import yaml
 
 router = APIRouter()
-jira_breakdown_service = JiraBreakdownService()
-jira_orchestration_service = JiraOrchestrationService()
-response_formatter = ResponseFormatterService()
-revision_service = RevisionService()
 
 @router.post(
     "/generate-description/", 
@@ -36,6 +32,7 @@ revision_service = RevisionService()
 )
 async def generate_ticket_description(request: TicketGenerationRequest):
     """Generate a JIRA ticket description using LLM"""
+    jira_breakdown_service = JiraBreakdownService(request.epic_key)
     return await jira_breakdown_service.generate_ticket_description(
         context=request.context,
         requirements=request.requirements,
@@ -51,6 +48,7 @@ async def generate_ticket_description(request: TicketGenerationRequest):
 )
 async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
     """Analyze the complexity of a ticket"""
+    jira_breakdown_service = JiraBreakdownService(request.epic_key)
     return await jira_breakdown_service.analyze_ticket_complexity(
         ticket_description=request.ticket_description
     )
@@ -59,7 +57,9 @@ async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
 async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
     """Break down a JIRA epic into smaller tasks"""
     try:
-        result = await jira_breakdown_service.break_down_epic(epic_key)
+        jira_breakdown_service = JiraBreakdownService(epic_key)
+        response_formatter = ResponseFormatterService()
+        result = await jira_breakdown_service.break_down_epic()
         return response_formatter.format_epic_breakdown(result)
         
     except Exception as e:
@@ -85,7 +85,9 @@ async def create_epic_subtasks(
     logger.info(f"Received request to create subtasks for epic: {epic_key}")
     logger.debug(f"Create in JIRA: {create_in_jira}, Dry run: {dry_run}")
     
-    breakdown = await jira_breakdown_service.break_down_epic(epic_key)
+    jira_breakdown_service = JiraBreakdownService(epic_key)
+    jira_orchestration_service = JiraOrchestrationService()
+    breakdown = await jira_breakdown_service.break_down_epic()
     
     if dry_run:
         execution_plan = await jira_orchestration_service.create_execution_plan(
@@ -106,7 +108,7 @@ async def create_epic_subtasks(
 async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmation:
     try:
         logger.info(f"Received revision request for execution: {request.execution_id}")
-        logger.debug(f"Request data: {request.dict()}")
+        logger.debug(f"Request data: {request.model_dump()}")
         
         # Validate the request has content
         if not request.revision_request.strip():
@@ -115,8 +117,26 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
                 detail="Revision request cannot be empty"
             )
         
-        # Get execution record to get epic_key
-        execution = await revision_service.execution_tracker.get_execution_record(request.execution_id)
+        # Find the epic key from the proposed tickets file
+        proposed_dir = "proposed_tickets"
+        epic_key = None
+        for filename in os.listdir(proposed_dir):
+            if filename.endswith(".yaml"):
+                filepath = os.path.join(proposed_dir, filename)
+                with open(filepath, 'r') as f:
+                    content = yaml.safe_load(f)
+                    if content.get('execution_id') == request.execution_id:
+                        epic_key = content.get('epic_key')
+                        break
+        
+        if not epic_key:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No execution found with ID: {request.execution_id}"
+            )
+        
+        # Initialize revision service with epic key
+        revision_service = RevisionService(epic_key)
         
         # Generate a temporary revision ID
         temp_revision_id = str(uuid7())
@@ -130,17 +150,17 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
         
         logger.debug(f"Got interpreted changes: {interpreted_changes}")
         
-        await revision_service.store_revision_request(
-            temp_revision_id=temp_revision_id,
-            original_execution_id=request.execution_id,
-            interpreted_changes=interpreted_changes,
-            epic_key=execution.epic_key  # Pass the epic_key from execution record
+        # Create revision record
+        revision = await revision_service.create_revision(
+            execution_id=request.execution_id,
+            changes_requested=request.revision_request,
+            changes_interpreted=interpreted_changes
         )
         
         return RevisionConfirmation(
             original_execution_id=request.execution_id,
             interpreted_changes=interpreted_changes,
-            temp_revision_id=temp_revision_id
+            temp_revision_id=revision.revision_id
         )
         
     except Exception as e:
@@ -159,27 +179,43 @@ async def confirm_revision_request(
 ) -> RevisionConfirmation:
     """Confirm whether the interpreted changes are correct"""
     try:
-        # No need to convert to uuid7, use string directly
-        revision = await revision_service.confirm_revision_request(
-            temp_revision_id=temp_revision_id,
+        # Find the epic key from the execution plan file
+        execution_plans_dir = "execution_plans"
+        epic_key = None
+        for filename in os.listdir(execution_plans_dir):
+            if filename.endswith(".md"):
+                filepath = os.path.join(execution_plans_dir, filename)
+                with open(filepath, 'r') as f:
+                    content = f.read()
+                    if temp_revision_id in content:
+                        # Extract epic key from filename (format: EXECUTION_EPIC-KEY_timestamp.md)
+                        parts = filename.split('_')
+                        if len(parts) > 1:
+                            epic_key = parts[1]
+                            break
+        
+        if not epic_key:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No revision found with ID: {temp_revision_id}"
+            )
+        
+        # Initialize revision service with epic key
+        revision_service = RevisionService(epic_key)
+        
+        # Update revision status
+        await revision_service.update_revision_status(
+            revision_id=temp_revision_id,
+            status="ACCEPTED" if accept else "REJECTED",
             accepted=accept
         )
         
-        if not accept:
-            return RevisionConfirmation(
-                original_execution_id=revision.execution_id,  # Already a string
-                interpreted_changes=revision.changes_interpreted,
-                confirmation_required=False,
-                temp_revision_id=temp_revision_id,
-                status="REJECTED"
-            )
-        
         return RevisionConfirmation(
-            original_execution_id=revision.execution_id,  # Already a string
-            interpreted_changes=revision.changes_interpreted,
+            original_execution_id="",  # This will be filled from the execution plan
+            interpreted_changes="",    # This will be filled from the execution plan
             confirmation_required=False,
             temp_revision_id=temp_revision_id,
-            status="ACCEPTED"
+            status="ACCEPTED" if accept else "REJECTED"
         )
         
     except Exception as e:
@@ -189,137 +225,44 @@ async def confirm_revision_request(
             detail=f"Failed to confirm revision request: {str(e)}"
         )
 
-@router.post("/apply-revision/{temp_revision_id}")
-async def apply_revision(
-    temp_revision_id: str
-) -> RevisionResponse:
-    """Apply the confirmed changes and generate new execution plan"""
-    try:
-        # Use string directly
-        revision = await revision_service.get_revision_details(temp_revision_id)
-        if not revision.accepted:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot apply revision that hasn't been accepted"
-            )
-        
-        # Generate new execution id as string
-        new_execution_id = str(uuid7())
-        new_plan = await revision_service.apply_revision(
-            original_execution_id=revision.execution_id,
-            interpreted_changes=revision.interpreted_changes,
-            new_execution_id=new_execution_id
-        )
-        
-        return RevisionResponse(
-            original_execution_id=revision.execution_id,
-            new_execution_id=new_execution_id,
-            changes_made=revision.interpreted_changes,
-            new_plan_file=new_plan.filename
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to apply revision: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to apply revision: {str(e)}"
-        )
-
 @router.get(
     "/debug/executions",
-    summary="Debug endpoint to view execution records",
-    description="Lists all execution records in the database"
+    summary="Debug endpoint to list execution plans",
+    description="Lists all execution plan files"
 )
 async def list_executions():
-    """List all execution records for debugging"""
+    """List all execution plan files for debugging"""
     try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM executions ORDER BY created_at DESC")
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            
-            return {
-                "executions": [
-                    dict(zip(columns, row))
-                    for row in rows
-                ]
-            }
+        execution_plans_dir = "execution_plans"
+        executions = []
+        
+        if os.path.exists(execution_plans_dir):
+            for filename in os.listdir(execution_plans_dir):
+                if filename.startswith("EXECUTION_") and filename.endswith(".md"):
+                    filepath = os.path.join(execution_plans_dir, filename)
+                    stat = os.stat(filepath)
+                    
+                    # Parse filename for metadata (format: EXECUTION_EPIC-KEY_timestamp.md)
+                    parts = filename.split('_')
+                    if len(parts) > 2:
+                        epic_key = parts[1]
+                        timestamp = parts[2].replace('.md', '')
+                        
+                        executions.append({
+                            "filename": filename,
+                            "epic_key": epic_key,
+                            "created_at": timestamp,
+                            "file_size": stat.st_size,
+                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                        })
+        
+        return {
+            "executions": sorted(executions, key=lambda x: x["created_at"], reverse=True)
+        }
+        
     except Exception as e:
         logger.error(f"Failed to list executions: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to list executions: {str(e)}"
-        )
-
-@router.get(
-    "/debug/revisions",
-    summary="Debug endpoint to view revision records",
-    description="Lists all revision records in the database"
-)
-async def list_revisions():
-    """List all revision records for debugging"""
-    try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM revisions ORDER BY created_at DESC")
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            
-            return {
-                "revisions": [
-                    dict(zip(columns, row))
-                    for row in rows
-                ]
-            }
-    except Exception as e:
-        logger.error(f"Failed to list revisions: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list revisions: {str(e)}"
-        )
-
-@router.get("/debug/executions/{execution_id}")
-async def get_execution_details(execution_id: str):
-    """Get execution record and its revision history by ID"""
-    try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            
-            # Get execution record
-            cursor.execute("""
-                SELECT * FROM executions 
-                WHERE execution_id = ?
-            """, (execution_id,))
-            columns = [description[0] for description in cursor.description]
-            execution_row = cursor.fetchone()
-            
-            if not execution_row:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No execution found with ID: {execution_id}"
-                )
-            
-            # Get revision history
-            cursor.execute("""
-                SELECT * FROM revisions 
-                WHERE execution_id = ? 
-                ORDER BY created_at DESC
-            """, (execution_id,))
-            revision_columns = [description[0] for description in cursor.description]
-            revision_rows = cursor.fetchall()
-            
-            return {
-                "execution": dict(zip(columns, execution_row)),
-                "revisions": [
-                    dict(zip(revision_columns, row))
-                    for row in revision_rows
-                ]
-            }
-            
-    except Exception as e:
-        logger.error(f"Failed to get execution details: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get execution details: {str(e)}"
         ) 

@@ -10,8 +10,13 @@ from services.execution_log_service import ExecutionLogService
 from services.task_tracker import TaskTracker
 from services.validation_helper import ValidationHelper
 from services.proposed_tickets_service import ProposedTicketsService
-from services.execution_tracker_service import ExecutionTrackerService
 from uuid_extensions import uuid7
+from models.responses import EpicBreakdownResponse
+from models.task_group import TaskGroup
+from models.sub_task import SubTask
+from models.proposed_tickets import ProposedTickets
+import yaml
+
 class JiraBreakdownService:
     """
     Service responsible for orchestrating the breakdown of JIRA epics into smaller tasks.
@@ -30,14 +35,17 @@ class JiraBreakdownService:
     5. Optionally creates tickets in JIRA
     """
 
-    def __init__(self):
-        """Initialize all required services for epic breakdown"""
-        logger.info("Initializing JiraBreakdownService")
-        self.jira_service = JiraService()
-        self.llm = VertexLLM()
+    def __init__(self, epic_key: str):
+        """Initialize the breakdown service with dependencies"""
+        self.epic_key = epic_key
+        self.execution_id = str(uuid7())  # Generate execution ID at initialization
+        self.execution_log = ExecutionLogService(epic_key)
+        self.proposed_tickets = ProposedTicketsService(epic_key=epic_key, execution_id=self.execution_id)
         self.prompt_helper = PromptHelperService()
+        self.jira = JiraService()
+        logger.info("Initializing JiraBreakdownService")
+        self.llm = VertexLLM()
         self.parser = TicketParserService()
-        self.execution_tracker = ExecutionTrackerService()
         logger.info("Successfully initialized all required services")
 
     async def generate_ticket_description(
@@ -98,19 +106,17 @@ class JiraBreakdownService:
             "raw_response": response
         }
 
-    async def break_down_epic(self, epic_key: str) -> Dict[str, Any]:
+    async def break_down_epic(self) -> Dict[str, Any]:
         """Break down a JIRA epic into smaller tasks"""
         execution_id = str(uuid7())
-        execution_log = ExecutionLogService(epic_key)
-        task_tracker = TaskTracker(epic_key)
-        proposed_tickets = ProposedTicketsService(epic_key, execution_id)
+        task_tracker = TaskTracker(self.epic_key)
         
         try:
-            logger.info(f"Breaking down epic: {epic_key}")
+            logger.info(f"Breaking down epic: {self.epic_key}")
             
             # Get epic details
-            epic_details = await self.jira_service.get_ticket(epic_key)
-            execution_log.log_section("Epic Details", json.dumps(epic_details, indent=2))
+            epic_details = await self.jira.get_ticket(self.epic_key)
+            self.execution_log.log_section("Epic Details", json.dumps(epic_details, indent=2))
             
             # Analyze epic
             prompt = self.prompt_helper.build_epic_analysis_prompt(
@@ -120,7 +126,7 @@ class JiraBreakdownService:
             response = await self.llm.generate_content(prompt)
             epic_analysis = self.parser.parse_epic_analysis(response)
             
-            execution_log.log_llm_interaction(
+            self.execution_log.log_llm_interaction(
                 "Epic Analysis",
                 prompt,
                 response,
@@ -131,9 +137,8 @@ class JiraBreakdownService:
                 # Pass both execution_log and task_tracker
                 await self._generate_high_level_tasks(
                     epic_analysis,
-                    execution_log,
                     task_tracker,
-                    proposed_tickets
+                    self.proposed_tickets
                 )
                 
                 # Debug log task tracker state before breakdown
@@ -146,49 +151,40 @@ class JiraBreakdownService:
                 await self._break_down_tasks(
                     all_tasks,
                     epic_details,
-                    execution_log,
+                    self.execution_log,
                     task_tracker,
-                    proposed_tickets
+                    self.proposed_tickets
                 )
                 
                 # Save the proposed tickets
-                proposed_tickets.save()
+                self.proposed_tickets.save()
                 
                 # Use task tracker for summary
                 summary = task_tracker.get_summary()
-                execution_log.log_summary(summary)
-                
-                # Track the execution
-                await self.execution_tracker.create_execution_record(
-                    execution_id=execution_id,
-                    epic_key=epic_key,
-                    execution_plan_file=execution_log.filename,
-                    proposed_plan_file=proposed_tickets.filename,
-                    status="ACTIVE"
-                )
+                self.execution_log.log_summary(summary)
                 
                 return {
                     "execution_id": execution_id,
-                    "epic_key": epic_key,
+                    "epic_key": self.epic_key,
                     "epic_summary": epic_details["summary"],
                     "analysis": epic_analysis,
                     "tasks": task_tracker.get_all_tasks(),
-                    "execution_plan_file": execution_log.filename,
-                    "proposed_tickets_file": proposed_tickets.filename
+                    "execution_plan_file": self.execution_log.filename,
+                    "proposed_tickets_file": self.proposed_tickets.filename
                 }
                 
             except Exception as e:
                 # Use task tracker for error summary
                 error_summary = task_tracker.get_summary()
                 error_summary["errors"] = [str(e)]
-                execution_log.log_summary(error_summary)
+                self.execution_log.log_summary(error_summary)
                 
                 # Save failed execution record
-                await self.execution_tracker.create_execution_record(
+                await self.execution_log.create_execution_record(
                     execution_id=execution_id,
-                    epic_key=epic_key,
-                    execution_plan_file=execution_log.filename,
-                    proposed_plan_file=proposed_tickets.filename,
+                    epic_key=self.epic_key,
+                    execution_plan_file=self.execution_log.filename,
+                    proposed_plan_file=self.proposed_tickets.filename,
                     status="FAILED"
                 )
                 
@@ -197,7 +193,7 @@ class JiraBreakdownService:
                 logger.error(json.dumps(task_tracker.get_all_tasks() if 'tasks' in locals() else "No tasks generated", indent=2))
                 logger.error(f"Epic analysis that caused error:\n{epic_analysis}")
                 return {
-                    "epic_key": epic_key,
+                    "epic_key": self.epic_key,
                     "epic_summary": epic_details["summary"],
                     "analysis": epic_analysis,
                     "error": str(e),
@@ -208,13 +204,13 @@ class JiraBreakdownService:
                 
         except Exception as e:
             # Fatal error during setup or epic retrieval
-            execution_log.log_section("Fatal Error", str(e))
+            self.execution_log.log_section("Fatal Error", str(e))
             
             # Save fatal error execution record
-            await self.execution_tracker.create_execution_record(
+            await self.execution_log.create_execution_record(
                 execution_id=execution_id,
-                epic_key=epic_key,
-                execution_plan_file=execution_log.filename,
+                epic_key=self.epic_key,
+                execution_plan_file=self.execution_log.filename,
                 proposed_plan_file="",  # No proposed tickets in fatal error
                 status="FATAL_ERROR"
             )
@@ -249,7 +245,6 @@ class JiraBreakdownService:
     async def _generate_high_level_tasks(
         self,
         epic_analysis: Dict[str, Any],
-        execution_log: ExecutionLogService,
         task_tracker: TaskTracker,
         proposed_tickets: ProposedTicketsService
     ) -> None:
@@ -291,7 +286,7 @@ class JiraBreakdownService:
                 logger.debug(f"Task name: {task['high_level_task']['name']}")
             
             # Log interactions with more detail
-            execution_log.log_llm_interaction(
+            self.execution_log.log_llm_interaction(
                 "User Stories Generation",
                 prompt,
                 response,
@@ -300,7 +295,7 @@ class JiraBreakdownService:
                     "stories": user_stories
                 }
             )
-            execution_log.log_llm_interaction(
+            self.execution_log.log_llm_interaction(
                 "Technical Tasks Generation",
                 prompt,
                 response,
@@ -464,7 +459,6 @@ class JiraBreakdownService:
 
     async def create_epic_subtasks(
         self,
-        epic_key: str,
         breakdown: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
@@ -477,7 +471,6 @@ class JiraBreakdownService:
         4. Set additional fields (story points, labels, etc.)
 
         Args:
-            epic_key: The parent epic's key
             breakdown: The epic breakdown structure
 
         Returns:
@@ -487,14 +480,14 @@ class JiraBreakdownService:
             HTTPException: If ticket creation fails
         """
         try:
-            logger.info(f"Creating JIRA tickets for epic {epic_key}")
+            logger.info(f"Creating JIRA tickets for epic {self.epic_key}")
             created_tasks = []
-            project_key = epic_key.split("-")[0]
+            project_key = self.epic_key.split("-")[0]
 
             for task_group in breakdown["tasks"]:
                 # Create a story for the high-level task
                 high_level_task = task_group["high_level_task"]
-                story = await self.jira_service.create_ticket({
+                story = await self.jira.create_ticket({
                     "project_key": project_key,
                     "summary": high_level_task["name"],
                     "description": (
@@ -504,13 +497,13 @@ class JiraBreakdownService:
                         f"Dependencies: {', '.join(high_level_task['dependencies'])}"
                     ),
                     "issue_type": "Story",
-                    "parent_key": epic_key  # Link to parent epic
+                    "parent_key": self.epic_key  # Link to parent epic
                 })
                 created_tasks.append(story)
 
                 # Create subtasks
                 for subtask in task_group["subtasks"]:
-                    task = await self.jira_service.create_ticket({
+                    task = await self.jira.create_ticket({
                         "project_key": project_key,
                         "summary": subtask["title"],
                         "description": (
