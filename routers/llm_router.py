@@ -111,6 +111,7 @@ async def request_plan_revision(
     ticket_id: str,
     request: RevisionRequest
 ) -> RevisionConfirmation:
+    """Request a revision to a ticket"""
     try:
         logger.info(f"Received revision request for execution: {execution_id}, ticket: {ticket_id}")
         logger.debug(f"Request data: {request.model_dump()}")
@@ -135,44 +136,53 @@ async def request_plan_revision(
         # Get epic key from the ticket
         epic_key = target_ticket.epic_key
         
-        # Initialize revision service with epic key
-        revision_service = RevisionService(epic_key)
-        
-        # Generate a temporary revision ID
-        temp_revision_id = str(uuid7())
-        
-        # Add more logging
-        logger.debug("Calling interpret_revision_request...")
-        interpreted_changes = await revision_service.interpret_revision_request(
-            execution_id=execution_id,
-            ticket_id=ticket_id,
-            revision_request=request.revision_request
-        )
-        
-        logger.debug(f"Got interpreted changes: {interpreted_changes}")
-        
-        # Create revision record
-        revision = await revision_service.create_revision(
-            execution_id=execution_id,
-            ticket_id=ticket_id,
-            changes_requested=request.revision_request,
-            changes_interpreted=interpreted_changes
-        )
-        
-        return RevisionConfirmation(
-            original_execution_id=execution_id,
-            ticket_id=ticket_id,
-            interpreted_changes=interpreted_changes,
-            temp_revision_id=revision.revision_id
-        )
-        
+        try:
+            # Initialize revision service
+            revision_service = RevisionService()
+            
+            # Add more logging
+            logger.debug("Calling interpret_revision_request...")
+            interpreted_changes = await revision_service.interpret_revision_request(
+                execution_id=execution_id,
+                ticket_id=ticket_id,
+                revision_request=request.revision_request
+            )
+            
+            logger.debug(f"Got interpreted changes: {interpreted_changes}")
+            
+            # Create revision record
+            revision = await revision_service.create_revision(
+                execution_id=execution_id,
+                ticket_id=ticket_id,
+                changes_requested=request.revision_request,
+                changes_interpreted=interpreted_changes,
+                epic_key=epic_key
+            )
+            
+            return RevisionConfirmation(
+                original_execution_id=execution_id,
+                ticket_id=ticket_id,
+                interpreted_changes=interpreted_changes,
+                temp_revision_id=revision.revision_id
+            )
+            
+        except Exception as e:
+            logger.error(f"Internal error processing revision: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal error processing revision: {str(e)}"
+            )
+            
+    except HTTPException as http_ex:
+        logger.error(f"HTTP error in request_plan_revision: {http_ex.detail}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to process revision request: {str(e)}")
+        logger.error(f"Unexpected error in request_plan_revision: {str(e)}")
         logger.error(f"Request data: {request if request else 'No request data'}")
         logger.exception("Full traceback:")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process revision request: {str(e)}"
+            detail=f"Unexpected error processing revision request: {str(e)}"
         )
 
 @router.post("/confirm-revision-request/{temp_revision_id}")
@@ -185,50 +195,128 @@ async def confirm_revision_request(
         # Initialize MongoDB service
         mongodb_service = MongoDBService()
         
-        # Find the execution plan file that contains this revision ID
-        execution_plans_dir = "execution_plans"
-        epic_key = None
-        for filename in os.listdir(execution_plans_dir):
-            if filename.endswith(".md"):
-                filepath = os.path.join(execution_plans_dir, filename)
-                with open(filepath, 'r') as f:
-                    content = f.read()
-                    if temp_revision_id in content:
-                        # Extract epic key from filename (format: EXECUTION_EPIC-KEY_timestamp.md)
-                        parts = filename.split('_')
-                        if len(parts) > 1:
-                            epic_key = parts[1]
-                            break
-        
-        if not epic_key:
+        # Get the revision record
+        revision = mongodb_service.get_revision(temp_revision_id)
+        if not revision:
             raise HTTPException(
                 status_code=404,
                 detail=f"No revision found with ID: {temp_revision_id}"
             )
         
-        # Initialize revision service with epic key
-        revision_service = RevisionService(epic_key)
+        # Get epic key from the revision record
+        epic_key = revision.get("epic_key")
+        if not epic_key:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Epic key not found in revision record: {temp_revision_id}"
+            )
         
-        # Update revision status
-        await revision_service.update_revision_status(
-            revision_id=temp_revision_id,
-            status="ACCEPTED" if accept else "REJECTED",
-            accepted=accept
-        )
-        
-        return RevisionConfirmation(
-            original_execution_id="",  # This will be filled from the execution plan
-            interpreted_changes="",    # This will be filled from the execution plan
-            confirmation_required=False,
-            temp_revision_id=temp_revision_id,
-            status="ACCEPTED" if accept else "REJECTED"
-        )
-        
+        try:
+            # Initialize revision service
+            revision_service = RevisionService()
+            
+            # Update revision status
+            await revision_service.update_revision_status(
+                revision_id=temp_revision_id,
+                status="ACCEPTED" if accept else "REJECTED",
+                accepted=accept
+            )
+            
+            return RevisionConfirmation(
+                original_execution_id=revision.get("execution_id", ""),
+                interpreted_changes=revision.get("changes_interpreted", ""),
+                confirmation_required=False,
+                temp_revision_id=temp_revision_id,
+                status="ACCEPTED" if accept else "REJECTED"
+            )
+            
+        except Exception as e:
+            logger.error(f"Internal error confirming revision: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal error confirming revision: {str(e)}"
+            )
+            
+    except HTTPException as http_ex:
+        logger.error(f"HTTP error in confirm_revision_request: {http_ex.detail}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to confirm revision request: {str(e)}")
+        logger.error(f"Unexpected error in confirm_revision_request: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to confirm revision request: {str(e)}"
+            detail=f"Unexpected error confirming revision: {str(e)}"
+        )
+
+@router.post("/apply-revision/{temp_revision_id}")
+async def apply_revision(
+    temp_revision_id: str
+) -> RevisionResponse:
+    """Apply the accepted revision changes to the ticket"""
+    try:
+        # Initialize MongoDB service
+        mongodb_service = MongoDBService()
+        
+        # Get the revision record
+        revision = mongodb_service.get_revision(temp_revision_id)
+        if not revision:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No revision found with ID: {temp_revision_id}"
+            )
+        
+        # Check revision state
+        current_status = revision.get("status")
+        if current_status == "APPLIED":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Revision has already been applied. Current state: {current_status}"
+            )
+        elif current_status != "ACCEPTED":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot apply revision that is not in ACCEPTED state. Current state: {current_status}"
+            )
+        
+        try:
+            # Initialize revision service
+            revision_service = RevisionService()
+            
+            # Apply the changes using execution_id and ticket_id from the revision record
+            logger.debug("Applying revision changes...")
+            changes_made = await revision_service.apply_revision_changes(
+                execution_id=revision.get("execution_id"),
+                ticket_id=revision.get("ticket_id"),
+                changes_interpreted=revision.get("changes_interpreted")
+            )
+            
+            # Update revision status to APPLIED
+            await revision_service.update_revision_status(
+                revision_id=temp_revision_id,
+                status="APPLIED"
+            )
+            
+            return RevisionResponse(
+                original_execution_id=revision.get("execution_id"),
+                new_execution_id=revision.get("execution_id"),  # Same execution ID since we're modifying in place
+                changes_made=changes_made,
+                new_plan_file=revision.get("execution_plan_file")
+            )
+            
+        except Exception as e:
+            logger.error(f"Internal error applying revision changes: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Internal error applying revision changes: {str(e)}"
+            )
+            
+    except HTTPException as http_ex:
+        logger.error(f"HTTP error in apply_revision: {http_ex.detail}")
+        raise  # Just raise, don't re-raise
+    except Exception as e:
+        logger.error(f"Unexpected error in apply_revision: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error applying revision: {str(e)}"
         )
 
 @router.get(

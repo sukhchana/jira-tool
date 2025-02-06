@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from routers import jira_router, llm_router
 from utils.logger import logger
+from fastapi.responses import JSONResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,7 +52,10 @@ app.include_router(
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     logger.error(f"HTTP error occurred: {exc.detail}")
-    return {"detail": exc.detail, "status_code": exc.status_code}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
 
 if __name__ == "__main__":
     logger.info("Initializing JIRA Ticket Creator API")

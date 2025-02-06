@@ -219,6 +219,38 @@ class MongoDBService:
         """Get all revisions for a given execution"""
         return list(self.revisions.find({"execution_id": execution_id}))
 
+    def update_ticket(self, execution_id: str, ticket_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update a ticket in MongoDB
+        
+        Args:
+            execution_id: The execution ID of the ticket
+            ticket_id: The ID of the ticket to update
+            update_data: Dictionary containing the fields to update and their new values
+        
+        Returns:
+            bool: True if the update was successful, False otherwise
+        """
+        try:
+            # Add updated_at timestamp
+            update_data["updated_at"] = datetime.now()
+            
+            result = self.proposed_tickets.update_one(
+                {
+                    "execution_id": execution_id,
+                    "ticket_id": ticket_id
+                },
+                {"$set": update_data}
+            )
+            
+            return result.modified_count > 0
+            
+        except Exception as e:
+            logger.error(f"Failed to update ticket: {str(e)}")
+            logger.error(f"Execution ID: {execution_id}")
+            logger.error(f"Ticket ID: {ticket_id}")
+            logger.error(f"Update data: {update_data}")
+            raise
+
 if __name__ == "__main__":
     try:
         logger.info("Starting MongoDB service test")
