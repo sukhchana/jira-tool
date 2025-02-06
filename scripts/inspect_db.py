@@ -1,82 +1,113 @@
 #!/usr/bin/env python3
-import sqlite3
 import argparse
 from tabulate import tabulate
 from pathlib import Path
 import sys
+import asyncio
+from datetime import datetime
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from config.database import DATABASE
+from config.mongodb import MongoDBConnection
+from models.mongodb_models import (
+    ExecutionModel,
+    RevisionModel,
+    ProposedTicketModel,
+    ProposalCounterModel
+)
 
-def print_table(conn, table_name):
-    """Print contents of a table in a formatted way"""
-    cursor = conn.cursor()
+async def print_collection(db, collection_name):
+    """Print contents of a collection in a formatted way"""
+    cursor = db[collection_name].find().sort("created_at", -1)
     
-    # Get column names
-    cursor.execute(f"PRAGMA table_info({table_name})")
-    columns = [row[1] for row in cursor.fetchall()]
+    documents = []
+    async for doc in cursor:
+        # Convert datetime objects to strings for display
+        for key, value in doc.items():
+            if isinstance(value, datetime):
+                doc[key] = value.isoformat()
+        documents.append(doc)
     
-    # Get data
-    cursor.execute(f"SELECT * FROM {table_name} ORDER BY created_at DESC")
-    rows = cursor.fetchall()
-    
-    if not rows:
-        print(f"\nNo records found in {table_name}")
+    if not documents:
+        print(f"\nNo records found in {collection_name}")
         return
     
-    print(f"\n{table_name.upper()} TABLE:")
-    print(tabulate(rows, headers=columns, tablefmt="grid"))
+    # Get all unique keys from all documents
+    headers = set()
+    for doc in documents:
+        headers.update(doc.keys())
+    headers = sorted(list(headers))
+    
+    # Convert documents to rows
+    rows = []
+    for doc in documents:
+        row = []
+        for header in headers:
+            row.append(doc.get(header, ""))
+        rows.append(row)
+    
+    print(f"\n{collection_name.upper()} COLLECTION:")
+    print(tabulate(rows, headers=headers, tablefmt="grid"))
 
-def print_execution_details(conn, execution_id):
+async def print_execution_details(db, execution_id):
     """Print detailed information about a specific execution"""
-    cursor = conn.cursor()
-    
     # Get execution record
-    cursor.execute("""
-        SELECT * FROM executions 
-        WHERE execution_id = ?
-    """, (execution_id,))
-    execution_row = cursor.fetchone()
+    execution_doc = await db.executions.find_one({"execution_id": execution_id})
     
-    if not execution_row:
+    if not execution_doc:
         print(f"\nNo execution found with ID: {execution_id}")
         return
     
-    # Get column names for execution
-    cursor.execute("PRAGMA table_info(executions)")
-    execution_columns = [row[1] for row in cursor.fetchall()]
+    # Convert datetime objects to strings
+    for key, value in execution_doc.items():
+        if isinstance(value, datetime):
+            execution_doc[key] = value.isoformat()
     
     print("\nEXECUTION DETAILS:")
-    print(tabulate([execution_row], headers=execution_columns, tablefmt="grid"))
+    print(tabulate([execution_doc], headers=execution_doc.keys(), tablefmt="grid"))
     
     # Get revision history
-    cursor.execute("""
-        SELECT * FROM revisions 
-        WHERE execution_id = ? 
-        ORDER BY created_at DESC
-    """, (execution_id,))
-    revision_rows = cursor.fetchall()
+    cursor = db.revisions.find(
+        {"execution_id": execution_id}
+    ).sort("created_at", -1)
     
-    if revision_rows:
-        # Get column names for revisions
-        cursor.execute("PRAGMA table_info(revisions)")
-        revision_columns = [row[1] for row in cursor.fetchall()]
+    revisions = []
+    async for doc in cursor:
+        # Convert datetime objects to strings
+        for key, value in doc.items():
+            if isinstance(value, datetime):
+                doc[key] = value.isoformat()
+        revisions.append(doc)
+    
+    if revisions:
+        # Get all unique keys from all revisions
+        headers = set()
+        for doc in revisions:
+            headers.update(doc.keys())
+        headers = sorted(list(headers))
+        
+        # Convert documents to rows
+        rows = []
+        for doc in revisions:
+            row = []
+            for header in headers:
+                row.append(doc.get(header, ""))
+            rows.append(row)
         
         print("\nREVISION HISTORY:")
-        print(tabulate(revision_rows, headers=revision_columns, tablefmt="grid"))
+        print(tabulate(rows, headers=headers, tablefmt="grid"))
     else:
         print("\nNo revisions found for this execution")
 
-def main():
-    parser = argparse.ArgumentParser(description="Inspect SQLite database")
+async def main():
+    parser = argparse.ArgumentParser(description="Inspect MongoDB database")
     parser.add_argument(
-        "--table", 
-        choices=["executions", "revisions", "all"],
+        "--collection", 
+        choices=["executions", "revisions", "proposed_tickets", "proposal_counters", "all"],
         default="all",
-        help="Which table to inspect"
+        help="Which collection to inspect"
     )
     parser.add_argument(
         "--execution-id",
@@ -86,20 +117,32 @@ def main():
     args = parser.parse_args()
     
     try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            if args.execution_id:
-                print_execution_details(conn, args.execution_id)
+        db = MongoDBConnection()
+        await db.connect()
+        
+        if args.execution_id:
+            await print_execution_details(db.db, args.execution_id)
+        else:
+            collections = []
+            if args.collection == "all":
+                collections = [
+                    "executions",
+                    "revisions",
+                    "proposed_tickets",
+                    "proposal_counters"
+                ]
             else:
-                if args.table in ["all", "executions"]:
-                    print_table(conn, "executions")
+                collections = [args.collection]
+            
+            for collection in collections:
+                await print_collection(db.db, collection)
                 
-                if args.table in ["all", "revisions"]:
-                    print_table(conn, "revisions")
-                    
-    except sqlite3.OperationalError as e:
+        await db.close()
+            
+    except Exception as e:
         print(f"Error accessing database: {e}")
-        print(f"Database path: {DATABASE['sqlite']['path']}")
+        print(f"Database connection string: {db.db.client.address if db.db else 'Not connected'}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(main()) 

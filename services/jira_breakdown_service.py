@@ -12,6 +12,9 @@ from services.validation_helper import ValidationHelper
 from services.proposed_tickets_service import ProposedTicketsService
 from services.execution_tracker_service import ExecutionTrackerService
 from uuid_extensions import uuid7
+from config.breakdown_config import BreakdownConfig
+from datetime import datetime
+
 class JiraBreakdownService:
     """
     Service responsible for orchestrating the breakdown of JIRA epics into smaller tasks.
@@ -98,25 +101,57 @@ class JiraBreakdownService:
             "raw_response": response
         }
 
-    async def break_down_epic(self, epic_key: str) -> Dict[str, Any]:
+    async def break_down_epic(
+        self,
+        epic_key: str,
+        config: Optional[BreakdownConfig] = None
+    ) -> Dict[str, Any]:
         """Break down a JIRA epic into smaller tasks"""
         execution_id = str(uuid7())
         execution_log = ExecutionLogService(epic_key)
         task_tracker = TaskTracker(epic_key)
-        proposed_tickets = ProposedTicketsService(epic_key, execution_id)
+        proposed_tickets = ProposedTicketsService()
         
         try:
+            logger.info("=== Creating Initial Execution Record ===")
+            logger.info(f"execution_id: {execution_id}")
+            logger.info(f"epic_key: {epic_key}")
+            logger.info(f"execution_plan_file: {execution_log.filename}")
+            logger.info(f"proposed_plan_file: ''")
+            logger.info(f"status: NEW")
+            
+            # Create initial execution record
+            await self.execution_tracker.create_execution_record(
+                execution_id=execution_id,
+                epic_key=epic_key,
+                execution_plan_file=execution_log.filename,
+                proposed_plan_file="",  # Will be updated later
+                status="NEW"  # Initial status
+            )
+            
+            # Use default config if none provided
+            if config is None:
+                config = BreakdownConfig()
+                
+            # Get epic details from JIRA
+            epic = await self.jira_service.get_ticket(epic_key)
+            
+            # Build prompt with constraints
+            prompt = f"""
+            Please break down the following JIRA epic into smaller tasks.
+            
+            Epic Title: {epic["summary"]}
+            Epic Description: {epic["description"]}
+            
+            {config.to_prompt_constraints()}
+            
+            Please provide a structured breakdown including:
+            ...
+            """
+            
             logger.info(f"Breaking down epic: {epic_key}")
             
-            # Get epic details
-            epic_details = await self.jira_service.get_ticket(epic_key)
-            execution_log.log_section("Epic Details", json.dumps(epic_details, indent=2))
-            
             # Analyze epic
-            prompt = self.prompt_helper.build_epic_analysis_prompt(
-                epic_details["summary"],
-                epic_details["description"]
-            )
             response = await self.llm.generate_content(prompt)
             epic_analysis = self.parser.parse_epic_analysis(response)
             
@@ -128,69 +163,69 @@ class JiraBreakdownService:
             )
             
             try:
-                # Pass both execution_log and task_tracker
                 await self._generate_high_level_tasks(
                     epic_analysis,
                     execution_log,
                     task_tracker,
-                    proposed_tickets
+                    proposed_tickets,
+                    execution_id,
+                    epic_key
                 )
-                
-                # Debug log task tracker state before breakdown
-                logger.debug("Task tracker state before breakdown:")
-                logger.debug(task_tracker.debug_state())
-                
-                all_tasks = task_tracker.get_all_tasks()
-                logger.debug(f"Tasks from tracker:\n{json.dumps(all_tasks, indent=2)}")
                 
                 await self._break_down_tasks(
-                    all_tasks,
-                    epic_details,
+                    task_tracker.get_all_tasks(),
+                    epic,
                     execution_log,
                     task_tracker,
-                    proposed_tickets
+                    proposed_tickets,
+                    config
                 )
                 
-                # Save the proposed tickets
-                proposed_tickets.save()
+                # Get final tasks after breakdown
+                final_tasks = task_tracker.get_all_tasks()
+                
+                # Store final proposal and update execution record
+                proposal_id = await proposed_tickets.store_proposal(
+                    execution_id=execution_id,
+                    epic_key=epic_key,
+                    high_level_tasks=final_tasks
+                )
+                
+                # Export to YAML
+                yaml_file = await proposed_tickets.export_proposal_to_yaml(proposal_id)
+                
+                # Update execution record with success status and yaml file
+                await self.execution_tracker.update_execution_status(
+                    execution_id=execution_id,
+                    status="COMPLETED"
+                )
                 
                 # Use task tracker for summary
                 summary = task_tracker.get_summary()
                 execution_log.log_summary(summary)
                 
-                # Track the execution
-                await self.execution_tracker.create_execution_record(
-                    execution_id=execution_id,
-                    epic_key=epic_key,
-                    execution_plan_file=execution_log.filename,
-                    proposed_plan_file=proposed_tickets.filename,
-                    status="ACTIVE"
-                )
-                
                 return {
                     "execution_id": execution_id,
                     "epic_key": epic_key,
-                    "epic_summary": epic_details["summary"],
+                    "epic_summary": epic["summary"],
                     "analysis": epic_analysis,
-                    "tasks": task_tracker.get_all_tasks(),
+                    "tasks": final_tasks,
                     "execution_plan_file": execution_log.filename,
-                    "proposed_tickets_file": proposed_tickets.filename
+                    "proposed_tickets_file": yaml_file,
+                    "proposal_id": proposal_id
                 }
                 
             except Exception as e:
+                # Update execution record with failed status
+                await self.execution_tracker.update_execution_status(
+                    execution_id=execution_id,
+                    status="FAILED"
+                )
+                
                 # Use task tracker for error summary
                 error_summary = task_tracker.get_summary()
                 error_summary["errors"] = [str(e)]
                 execution_log.log_summary(error_summary)
-                
-                # Save failed execution record
-                await self.execution_tracker.create_execution_record(
-                    execution_id=execution_id,
-                    epic_key=epic_key,
-                    execution_plan_file=execution_log.filename,
-                    proposed_plan_file=proposed_tickets.filename,
-                    status="FAILED"
-                )
                 
                 logger.error(f"Failed during task generation: {str(e)}")
                 logger.error("Tasks structure at time of error:")
@@ -198,26 +233,28 @@ class JiraBreakdownService:
                 logger.error(f"Epic analysis that caused error:\n{epic_analysis}")
                 return {
                     "epic_key": epic_key,
-                    "epic_summary": epic_details["summary"],
+                    "epic_summary": epic["summary"],
                     "analysis": epic_analysis,
                     "error": str(e),
                     "tasks": [],
-                    "execution_id": execution_id,  # Add execution_id to error response
-                    "status": "FAILED"
+                    "execution_id": execution_id,
+                    "status": "FAILED",
+                    "proposal_id": proposal_id
                 }
                 
         except Exception as e:
+            # Update execution record with fatal error status if it was created
+            try:
+                await self.execution_tracker.update_execution_status(
+                    execution_id=execution_id,
+                    status="FATAL_ERROR"
+                )
+            except ValueError:
+                # Record might not exist yet, log and continue
+                logger.warning(f"Could not update status for execution {execution_id}")
+            
             # Fatal error during setup or epic retrieval
             execution_log.log_section("Fatal Error", str(e))
-            
-            # Save fatal error execution record
-            await self.execution_tracker.create_execution_record(
-                execution_id=execution_id,
-                epic_key=epic_key,
-                execution_plan_file=execution_log.filename,
-                proposed_plan_file="",  # No proposed tickets in fatal error
-                status="FATAL_ERROR"
-            )
             
             logger.error(f"Fatal error breaking down epic: {str(e)}")
             raise HTTPException(
@@ -251,8 +288,10 @@ class JiraBreakdownService:
         epic_analysis: Dict[str, Any],
         execution_log: ExecutionLogService,
         task_tracker: TaskTracker,
-        proposed_tickets: ProposedTicketsService
-    ) -> None:
+        proposed_tickets: ProposedTicketsService,
+        execution_id: str,
+        epic_key: str
+    ):
         """Generate high-level tasks based on epic analysis"""
         try:
             # Generate user stories first
@@ -263,7 +302,12 @@ class JiraBreakdownService:
             # Add tasks to tracker and get IDs
             for story in user_stories:
                 task_tracker.add_user_story(story)
-                story["id"] = proposed_tickets.add_high_level_task(story)  # Store the returned ID
+                story["id"] = proposed_tickets.add_high_level_task(
+                    task=story,
+                    epic_key=epic_key,
+                    proposal_id=execution_id,
+                    execution_id=execution_id
+                )
             
             # Generate technical tasks
             prompt = self.prompt_helper.build_technical_tasks_prompt(user_stories, epic_analysis)
@@ -272,8 +316,14 @@ class JiraBreakdownService:
             
             # Add tasks to tracker and get IDs
             for task in technical_tasks:
-                task_tracker.add_technical_task(task)
-                task["id"] = proposed_tickets.add_high_level_task(task)  # Store the returned ID
+                task_id = proposed_tickets.add_high_level_task(
+                    task=task,
+                    epic_key=epic_key,
+                    proposal_id=execution_id,
+                    execution_id=execution_id
+                )
+                task["id"] = task_id  # Store the ID in the task dict instead
+                task_tracker.add_technical_task(task)  # Only pass the task
             
             # Verify task tracker state
             tracker_state = task_tracker.get_summary()
@@ -319,148 +369,29 @@ class JiraBreakdownService:
 
     async def _break_down_tasks(
         self,
-        high_level_tasks: List[Dict[str, Any]],
+        tasks: List[Dict[str, Any]],
         epic_details: Dict[str, Any],
         execution_log: ExecutionLogService,
         task_tracker: TaskTracker,
-        proposed_tickets: ProposedTicketsService
+        proposed_tickets: ProposedTicketsService,
+        config: Optional[BreakdownConfig] = None
     ) -> None:
-        """Break down high-level tasks into detailed subtasks."""
-        try:
-            # Debug log the input tasks
-            logger.debug(f"Received high-level tasks for breakdown:\n{json.dumps(high_level_tasks, indent=2)}")
-            
-            # Process each task
-            for task_group in high_level_tasks:
-                try:
-                    task = task_group["high_level_task"]
-                    logger.info(f"Breaking down task: {task['name']} ({task['type']})")
-                    
-                    prompt = self.prompt_helper.build_subtasks_prompt(task, epic_details)
-                    response = await self.llm.generate_content(prompt)
-                    
-                    # Log the subtask generation attempt
-                    logger.info(f"Raw LLM response for subtasks of {task['name']}:")
-                    logger.info("-" * 80)
-                    logger.info(response)
-                    logger.info("-" * 80)
-                    
-                    subtasks = self.parser.parse_subtasks(response)
-                    
-                    # Log parsed subtasks
-                    logger.info(f"Parsed {len(subtasks)} subtasks for {task['name']}:")
-                    for subtask in subtasks:
-                        logger.info(f"- {subtask['title']} ({subtask['story_points']} points)")
-                        logger.debug(f"  Details: {json.dumps(subtask, indent=2)}")
-                    
-                    # Add to execution log
-                    execution_log.log_section(
-                        f"Subtasks for {task['name']}", 
-                        json.dumps({
-                            "parent_task": task['name'],
-                            "parent_type": task['type'],
-                            "subtask_count": len(subtasks),
-                            "total_points": sum(st['story_points'] for st in subtasks),
-                            "subtasks": subtasks
-                        }, indent=2)
-                    )
-                    
-                    task_tracker.add_subtasks(task["name"], subtasks)
-                    proposed_tickets.add_subtasks(
-                        parent_name=task["name"],
-                        subtasks=subtasks,
-                        parent_id=task["id"]  # Access ID directly from task
-                    )
-                    logger.info(f"Completed breakdown for {task['name']} - {len(subtasks)} subtasks created")
-                    
-                except Exception as e:
-                    logger.error(f"Failed to break down task {task['name']}: {str(e)}")
-                    logger.error(f"Task details: {json.dumps(task, indent=2)}")
-                    raise
+        """Break down high-level tasks into subtasks"""
+        if config is None:
+            config = BreakdownConfig()
 
-            # Get final summary including subtasks
-            tracker_summary = task_tracker.get_summary()
-            total_tasks = len(high_level_tasks)
-            total_subtasks = tracker_summary['subtasks']
-            
-            # Calculate additional statistics
-            avg_story_points = 0
-            total_story_points = 0
-            skills_required = set()
-            max_subtasks = 0
-            min_subtasks = float('inf') if total_tasks > 0 else 0
-
-            for parent, subtasks in task_tracker.subtasks.items():
-                subtask_count = len(subtasks)
-                max_subtasks = max(max_subtasks, subtask_count)
-                min_subtasks = min(min_subtasks, subtask_count)
-                
-                for subtask in subtasks:
-                    total_story_points += subtask.get('story_points', 0)
-                    skills_required.update(subtask.get('required_skills', []))
-
-            avg_story_points = total_story_points / total_subtasks if total_subtasks > 0 else 0
-
-            # Calculate the average outside the f-string
-            avg_subtasks = (total_subtasks/total_tasks if total_tasks > 0 else 0)
-            avg_points = (total_story_points/total_subtasks if total_subtasks > 0 else 0)
-            estimated_days = (total_story_points/5 if total_story_points > 0 else 0)
-
-            completion_summary = (
-                f"\nTask Breakdown Completion Report\n"
-                f"===============================\n\n"
-                f"High-Level Tasks:\n"
-                f"- Total tasks processed: {total_tasks}\n"
-                f"- User Stories: {tracker_summary['user_stories']}\n"
-                f"- Technical Tasks: {tracker_summary['technical_tasks']}\n\n"
-                
-                f"Subtask Statistics:\n"
-                f"- Total subtasks created: {total_subtasks}\n"
-                f"- Average subtasks per task: {avg_subtasks:.1f}\n"
-                f"- Most subtasks for a task: {max_subtasks}\n"
-                f"- Least subtasks for a task: {min_subtasks}\n\n"
-                
-                f"Effort Estimation:\n"
-                f"- Total story points: {total_story_points}\n"
-                f"- Average points per subtask: {avg_points:.1f}\n"
-                f"- Estimated total effort: {estimated_days:.1f} days\n\n"
-                
-                f"Technical Requirements:\n"
-                f"- Required skills: {', '.join(sorted(skills_required))}\n\n"
-                
-                f"Breakdown by Parent Task:\n"
+        for task in tasks:
+            prompt = self.prompt_helper.build_task_breakdown_prompt(
+                task_type=task["type"],
+                task_summary=task["summary"],
+                epic_context=epic_details,
+                config=config
             )
 
-            # Add detailed breakdown by parent task
-            for parent, count in tracker_summary['subtasks_by_parent'].items():
-                parent_subtasks = task_tracker.subtasks.get(parent, [])
-                parent_points = sum(subtask.get('story_points', 0) for subtask in parent_subtasks)
-                completion_summary += (
-                    f"- {parent}:\n"
-                    f"  • Subtasks: {count}\n"
-                    f"  • Story Points: {parent_points}\n"
-                    f"  • Required Skills: {', '.join(sorted(set(skill for subtask in parent_subtasks for skill in subtask.get('required_skills', []))))}\n"
-                )
+            response = await self.llm.generate_content(prompt)
+            subtasks = self.parser.parse_subtasks(response)
 
-            # Add detailed subtask information to execution log
-            execution_log.log_section(
-                "Final Subtask Summary",
-                json.dumps({
-                    "total_high_level_tasks": total_tasks,
-                    "total_subtasks": total_subtasks,
-                    "subtasks_by_parent": tracker_summary['subtasks_by_parent'],
-                    "all_subtasks": task_tracker.subtasks
-                }, indent=2)
-            )
-
-            logger.info(completion_summary)
-            execution_log.log_section("Task Breakdown Completion", completion_summary)
-
-        except Exception as e:
-            logger.error(f"Failed to break down tasks: {str(e)}")
-            logger.error(f"High-level tasks: {json.dumps(high_level_tasks, indent=2)}")
-            logger.error(f"Epic details: {json.dumps(epic_details, indent=2)}")
-            raise
+            # Rest of the method...
 
     async def create_epic_subtasks(
         self,

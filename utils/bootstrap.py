@@ -18,7 +18,8 @@ load_dotenv(env_path)
 required_vars = [
     "GOOGLE_CLOUD_PROJECT",
     "GOOGLE_APPLICATION_CREDENTIALS",
-    "GOOGLE_CLOUD_LOCATION"
+    "GOOGLE_CLOUD_LOCATION",
+    "MONGO_CONNECTION_STRING"
 ]
 
 missing_vars = [var for var in required_vars if not os.getenv(var)]

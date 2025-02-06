@@ -1,12 +1,10 @@
 from typing import Dict, Any, Optional, List
 from uuid_extensions import uuid7
-import sqlite3
 from datetime import datetime
-import os
 from loguru import logger
 from dataclasses import dataclass
-from config.database import DATABASE
-from pathlib import Path
+from database.mongodb_handlers import ExecutionsHandler, RevisionsHandler
+from models.mongodb_models import ExecutionModel, RevisionModel
 
 @dataclass
 class ExecutionRecord:
@@ -35,49 +33,10 @@ class ExecutionTrackerService:
     """Service for tracking execution plans and their revisions"""
     
     def __init__(self):
-        """Initialize the tracker service with SQLite database"""
-        self.db_file = DATABASE["sqlite"]["path"]
-        self.db_dir = Path(self.db_file).parent
-        self.db_dir.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-        
-    def _init_db(self):
-        """Initialize the SQLite database with required tables"""
-        with sqlite3.connect(self.db_file) as conn:
-            cursor = conn.cursor()
-            
-            # Create executions table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS executions (
-                    execution_id TEXT PRIMARY KEY,
-                    epic_key TEXT NOT NULL,
-                    execution_plan_file TEXT NOT NULL,
-                    proposed_plan_file TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    parent_execution_id TEXT,
-                    FOREIGN KEY (parent_execution_id) REFERENCES executions (execution_id)
-                )
-            """)
-            
-            # Create revisions table with execution_plan_file
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS revisions (
-                    revision_id TEXT PRIMARY KEY,
-                    execution_id TEXT NOT NULL,
-                    proposed_plan_file TEXT NOT NULL,
-                    execution_plan_file TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    changes_requested TEXT NOT NULL,
-                    changes_interpreted TEXT NOT NULL,
-                    accepted BOOLEAN,
-                    accepted_at TIMESTAMP,
-                    FOREIGN KEY (execution_id) REFERENCES executions (execution_id)
-                )
-            """)
-            
-            conn.commit()
+        """Initialize the tracker service with MongoDB handlers"""
+        self.executions = ExecutionsHandler()
+        self.revisions = RevisionsHandler()
+        logger.info("Initialized ExecutionTrackerService with MongoDB")
     
     async def create_execution_record(
         self,
@@ -90,29 +49,35 @@ class ExecutionTrackerService:
     ) -> ExecutionRecord:
         """Create a new execution record"""
         try:
-            logger.info(f"Creating execution record for epic {epic_key} with ID {execution_id}")
-            with sqlite3.connect(self.db_file) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO executions (
-                        execution_id, epic_key, execution_plan_file,
-                        proposed_plan_file, status, created_at,
-                        parent_execution_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    execution_id,
-                    epic_key,
-                    execution_plan_file,
-                    proposed_plan_file,
-                    status,
-                    datetime.now().isoformat(),
-                    parent_execution_id if parent_execution_id else None
-                ))
-                conn.commit()
-                
-            record = await self.get_execution_record(execution_id)
-            logger.info(f"Successfully created execution record for {epic_key}")
-            return record
+            logger.info("=== Creating Execution Record ===")
+            logger.info(f"Parameters received:")
+            logger.info(f"execution_id: {execution_id}")
+            logger.info(f"epic_key: {epic_key}")
+            logger.info(f"execution_plan_file: {execution_plan_file}")
+            logger.info(f"proposed_plan_file: {proposed_plan_file}")
+            logger.info(f"parent_execution_id: {parent_execution_id}")
+            logger.info(f"status: {status}")
+            
+            execution = ExecutionModel(
+                execution_id=execution_id,
+                epic_key=epic_key,
+                execution_plan_file=execution_plan_file,
+                proposed_plan_file=proposed_plan_file,
+                status=status,
+                parent_execution_id=parent_execution_id
+            )
+            
+            result = await self.executions.create_execution(execution)
+            
+            return ExecutionRecord(
+                execution_id=result.execution_id,
+                epic_key=result.epic_key,
+                execution_plan_file=result.execution_plan_file,
+                proposed_plan_file=result.proposed_plan_file,
+                status=result.status,
+                created_at=result.created_at,
+                parent_execution_id=result.parent_execution_id
+            )
             
         except Exception as e:
             logger.error(f"Failed to create execution record: {str(e)}")
@@ -131,27 +96,29 @@ class ExecutionTrackerService:
     ) -> RevisionRecord:
         """Create a new revision record"""
         try:
-            with sqlite3.connect(self.db_file) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO revisions (
-                        revision_id, execution_id, proposed_plan_file,
-                        execution_plan_file, status, created_at, 
-                        changes_requested, changes_interpreted
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    revision_id,
-                    execution_id,
-                    proposed_plan_file,
-                    execution_plan_file,
-                    "PENDING",
-                    datetime.now().isoformat(),
-                    changes_requested,
-                    changes_interpreted
-                ))
-                conn.commit()
-                
-            return await self.get_revision_record(revision_id)
+            revision = RevisionModel(
+                revision_id=revision_id,
+                execution_id=execution_id,
+                changes_requested=changes_requested,
+                changes_interpreted=changes_interpreted,
+                proposed_plan_file=proposed_plan_file,
+                execution_plan_file=execution_plan_file
+            )
+            
+            result = await self.revisions.insert_revision(revision)
+            
+            return RevisionRecord(
+                revision_id=result.revision_id,
+                execution_id=result.execution_id,
+                proposed_plan_file=result.proposed_plan_file,
+                execution_plan_file=result.execution_plan_file,
+                status=result.status,
+                created_at=result.created_at,
+                changes_requested=result.changes_requested,
+                changes_interpreted=result.changes_interpreted,
+                accepted=result.accepted,
+                accepted_at=result.accepted_at
+            )
             
         except Exception as e:
             logger.error(f"Failed to create revision record: {str(e)}")
@@ -159,52 +126,38 @@ class ExecutionTrackerService:
     
     async def get_execution_record(self, execution_id: str) -> ExecutionRecord:
         """Get execution record by ID"""
-        with sqlite3.connect(self.db_file) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM executions WHERE execution_id = ?",
-                (execution_id,)
-            )
-            row = cursor.fetchone()
+        result = await self.executions.get_execution(execution_id)
+        if not result:
+            raise ValueError(f"No execution found for ID: {execution_id}")
             
-            if not row:
-                raise ValueError(f"No execution found for ID: {execution_id}")
-                
-            return ExecutionRecord(
-                execution_id=row[0],
-                epic_key=row[1],
-                execution_plan_file=row[2],
-                proposed_plan_file=row[3],
-                status=row[4],
-                created_at=datetime.fromisoformat(row[5]),
-                parent_execution_id=row[6] if row[6] else None
-            )
+        return ExecutionRecord(
+            execution_id=result.execution_id,
+            epic_key=result.epic_key,
+            execution_plan_file=result.execution_plan_file,
+            proposed_plan_file=result.proposed_plan_file,
+            status=result.status,
+            created_at=result.created_at,
+            parent_execution_id=result.parent_execution_id
+        )
     
     async def get_revision_record(self, revision_id: str) -> RevisionRecord:
         """Get revision record by ID"""
-        with sqlite3.connect(self.db_file) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM revisions WHERE revision_id = ?",
-                (revision_id,)
-            )
-            row = cursor.fetchone()
+        result = await self.revisions.get_revision(revision_id)
+        if not result:
+            raise ValueError(f"No revision found for ID: {revision_id}")
             
-            if not row:
-                raise ValueError(f"No revision found for ID: {revision_id}")
-                
-            return RevisionRecord(
-                revision_id=row[0],
-                execution_id=row[1],
-                proposed_plan_file=row[2],
-                execution_plan_file=row[3],
-                status=row[4],
-                created_at=datetime.fromisoformat(row[5]),
-                changes_requested=row[6],
-                changes_interpreted=row[7],
-                accepted=row[8],
-                accepted_at=datetime.fromisoformat(row[9]) if row[9] else None
-            )
+        return RevisionRecord(
+            revision_id=result.revision_id,
+            execution_id=result.execution_id,
+            proposed_plan_file=result.proposed_plan_file,
+            execution_plan_file=result.execution_plan_file,
+            status=result.status,
+            created_at=result.created_at,
+            changes_requested=result.changes_requested,
+            changes_interpreted=result.changes_interpreted,
+            accepted=result.accepted,
+            accepted_at=result.accepted_at
+        )
     
     async def update_revision_status(
         self,
@@ -212,39 +165,56 @@ class ExecutionTrackerService:
         status: str
     ) -> None:
         """Update the status of a revision"""
-        with sqlite3.connect(self.db_file) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE revisions SET status = ? WHERE revision_id = ?",
-                (status, revision_id)
-            )
-            conn.commit()
+        await self.revisions.update_revision_status(revision_id, status)
     
     async def get_revision_history(
         self,
         execution_id: str
     ) -> List[RevisionRecord]:
         """Get all revisions for an execution"""
-        with sqlite3.connect(self.db_file) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT * FROM revisions WHERE execution_id = ? ORDER BY created_at",
-                (execution_id,)
+        results = await self.revisions.get_revision_history(execution_id)
+        
+        return [
+            RevisionRecord(
+                revision_id=rev.revision_id,
+                execution_id=rev.execution_id,
+                proposed_plan_file=rev.proposed_plan_file,
+                execution_plan_file=rev.execution_plan_file,
+                status=rev.status,
+                created_at=rev.created_at,
+                changes_requested=rev.changes_requested,
+                changes_interpreted=rev.changes_interpreted,
+                accepted=rev.accepted,
+                accepted_at=rev.accepted_at
             )
-            rows = cursor.fetchall()
+            for rev in results
+        ]
+    
+    async def update_execution_status(
+        self,
+        execution_id: str,
+        status: str
+    ) -> ExecutionRecord:
+        """Update the status of an execution record"""
+        try:
+            logger.info(f"Updating execution status to {status} for ID {execution_id}")
             
-            return [
-                RevisionRecord(
-                    revision_id=row[0],
-                    execution_id=row[1],
-                    proposed_plan_file=row[2],
-                    execution_plan_file=row[3],
-                    status=row[4],
-                    created_at=datetime.fromisoformat(row[5]),
-                    changes_requested=row[6],
-                    changes_interpreted=row[7],
-                    accepted=row[8],
-                    accepted_at=datetime.fromisoformat(row[9]) if row[9] else None
-                )
-                for row in rows
-            ] 
+            result = await self.executions.update_execution_status(execution_id, status)
+            if not result:
+                raise ValueError(f"No execution found with ID: {execution_id}")
+                
+            return ExecutionRecord(
+                execution_id=result.execution_id,
+                epic_key=result.epic_key,
+                execution_plan_file=result.execution_plan_file,
+                proposed_plan_file=result.proposed_plan_file,
+                status=result.status,
+                created_at=result.created_at,
+                parent_execution_id=result.parent_execution_id
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to update execution status: {str(e)}")
+            logger.error(f"Execution ID: {execution_id}")
+            logger.error(f"New status: {status}")
+            raise 

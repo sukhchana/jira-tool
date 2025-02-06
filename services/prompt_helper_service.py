@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional, List
+from config.breakdown_config import BreakdownConfig
 
 class PromptHelperService:
     """Service for building and managing prompts for LLM interactions"""
@@ -7,9 +8,13 @@ class PromptHelperService:
     def build_ticket_prompt(
         context: str,
         requirements: Optional[str] = None,
-        additional_info: Optional[Dict[str, Any]] = None
+        additional_info: Optional[Dict[str, Any]] = None,
+        config: Optional[BreakdownConfig] = None
     ) -> str:
         """Build prompt for ticket description generation"""
+        if config is None:
+            config = BreakdownConfig()
+
         prompt_parts = [
             "Please create a well-structured JIRA ticket with the following information:\n\n",
             f"Context: {context}\n"
@@ -23,7 +28,7 @@ class PromptHelperService:
             for key, value in additional_info.items():
                 prompt_parts.append(f"- {key}: {value}\n")
                 
-        prompt_parts.append("""
+        prompt_parts.append(f"""
 Please format the response using EXACTLY this structure:
 
 <ticket>
@@ -32,7 +37,7 @@ Description: [Detailed description of the work required]
 
 Technical Domain: [Primary technical area]
 Required Skills: [Comma-separated list of key technical skills needed]
-Story Points: [1-5]
+Story Points: [{config.min_story_points}-{config.max_story_points}]
 Suggested Assignee: [Role/specialty of ideal assignee]
 Complexity: [Low/Medium/High]
 
@@ -59,7 +64,7 @@ Requirements:
 - Title should be clear and actionable
 - Description should provide comprehensive context
 - Include at least 2 Gherkin scenarios (happy path and error case)
-- Story points should reflect complexity (1-5 scale)
+- Story points should be between {config.min_story_points} and {config.max_story_points}
 - Required skills should be specific technologies/frameworks
 - Technical notes should include implementation guidance
 """)
@@ -67,12 +72,18 @@ Requirements:
         return "".join(prompt_parts)
 
     @staticmethod
-    def build_complexity_prompt(ticket_description: str) -> str:
+    def build_complexity_prompt(
+        ticket_description: str,
+        config: Optional[BreakdownConfig] = None
+    ) -> str:
         """Build prompt for ticket complexity analysis"""
+        if config is None:
+            config = BreakdownConfig()
+
         return f"""
         Please analyze the following JIRA ticket description and provide:
         1. Estimated complexity (Low/Medium/High)
-        2. Estimated story points (1-8)
+        2. Estimated story points ({config.min_story_points}-{config.max_story_points})
         3. Key technical considerations
         4. Potential risks
         
@@ -81,48 +92,52 @@ Requirements:
         """
 
     @staticmethod
-    def build_epic_analysis_prompt(summary: str, description: str) -> str:
-        """Build prompt for analyzing epic scope"""
+    def build_epic_analysis_prompt(
+        epic_summary: str,
+        epic_description: str,
+        config: Optional[BreakdownConfig] = None
+    ) -> str:
+        """Build prompt for analyzing an epic"""
+        if config is None:
+            config = BreakdownConfig()
+
         return f"""
-        Please analyze this epic and provide a structured breakdown of its scope.
+        Please analyze the following JIRA epic and break it down into smaller tasks.
 
-        Epic Summary: {summary}
-        
-        Epic Description:
-        {description}
+        Epic Title: {epic_summary}
+        Epic Description: {epic_description}
 
-        First, provide a summary of your analysis:
-        <summary>
-        Total Technical Domains: [number]
-        Total Core Requirements: [number]
-        Total Dependencies: [number]
-        Total Challenges: [number]
-        </summary>
+        {config.to_prompt_constraints()}
 
-        Then provide the detailed analysis:
+        Please provide a structured breakdown in the following format:
+
         <analysis>
-        Main Objective: [Clear statement of the epic's primary goal]
+        Scope Analysis:
+        - [Key aspects of the epic's scope]
+        - [Technical considerations]
+        - [Dependencies and integrations]
 
-        Stakeholders:
-        [List key stakeholders]
+        Complexity Assessment:
+        - Overall Complexity: [High/Medium/Low]
+        - Technical Risk Areas: [List key risk areas]
+        - Required Skills: [List required technical skills]
 
-        Core Requirements:
-        [List main requirements]
-
-        Technical Domains:
-        [List technical areas involved]
-
-        Dependencies:
-        [List external dependencies]
-
-        Challenges:
-        [List potential challenges]
+        Suggested Breakdown Structure:
+        - [High-level breakdown strategy]
+        - [Key components or areas]
+        - [Integration points]
         </analysis>
         """
 
     @staticmethod
-    def build_user_stories_prompt(epic_analysis: Dict[str, Any]) -> str:
+    def build_user_stories_prompt(
+        epic_analysis: Dict[str, Any],
+        config: Optional[BreakdownConfig] = None
+    ) -> str:
         """Build prompt for generating user stories with Gherkin scenarios"""
+        if config is None:
+            config = BreakdownConfig()
+
         return f"""
         Please create user stories based on this epic analysis:
 
@@ -130,12 +145,12 @@ Requirements:
 
         First, provide a summary of planned stories:
         <summary>
-        Total User Stories: [number]
+        Total User Stories: [maximum {config.max_user_stories}]
         Key User Types: [list]
         Primary Value Streams: [list]
         </summary>
 
-        Then, create 3-5 user stories that represent valuable features or capabilities.
+        Then, create {config.max_user_stories} or fewer user stories that represent valuable features or capabilities.
         For each user story, provide both a description and Gherkin scenarios:
 
         <user_story>
@@ -143,6 +158,7 @@ Requirements:
         Description: As a [user type], I want to [action] so that [benefit]
         Technical Domain: [Primary technical area]
         Complexity: [Low/Medium/High]
+        Story Points: [{config.min_story_points}-{config.max_story_points}]
         Business Value: [High/Medium/Low]
         Dependencies: [List any dependencies]
 
@@ -348,9 +364,12 @@ Requirements:
         self,
         epic_summary: str,
         epic_description: str,
-        epic_analysis: Dict[str, Any]
+        epic_analysis: Dict[str, Any],
+        config: Optional[BreakdownConfig] = None
     ) -> str:
-        """Build a final prompt that forces a breakdown by suggesting structure"""
+        if config is None:
+            config = BreakdownConfig()
+
         return f"""
 Let's systematically break down this epic: "{epic_summary}"
 
@@ -361,19 +380,20 @@ Technical Domains: {', '.join(epic_analysis.get('technical_domains', []))}
 
 First, provide your breakdown strategy:
 <strategy>
-Total Planned Stories: [number]
-Total Planned Technical Tasks: [number]
+Total Planned Stories: [maximum {config.max_user_stories}]
+Total Planned Technical Tasks: [maximum {config.max_technical_tasks}]
 Breakdown Approach: [Brief explanation]
 </strategy>
 
 Please create the following breakdown:
 
-1. Core User Stories (minimum 2):
+1. Core User Stories (minimum 2, maximum {config.max_user_stories}):
 <user_story>
 Task: User Story - [Feature Name]
 Description: As a [user], I want to [action] so that [benefit]
 Technical Domain: [Area]
 Complexity: [Low/Medium/High]
+Story Points: [{config.min_story_points}-{config.max_story_points}]
 Dependencies: [Any prerequisites]
 </user_story>
 
@@ -411,4 +431,51 @@ Total Technical Tasks Created: [number]
 Estimated Timeline: [weeks]
 Key Technical Domains Covered: [list]
 </summary>
-""" 
+"""
+
+    def build_task_breakdown_prompt(
+        self,
+        task_type: str,
+        task_summary: str,
+        epic_context: Dict[str, Any],
+        config: Optional[BreakdownConfig] = None
+    ) -> str:
+        """Build prompt for breaking down a high-level task"""
+        if config is None:
+            config = BreakdownConfig()
+
+        max_subtasks = (
+            config.max_subtasks_per_story 
+            if task_type == "USER-STORY" 
+            else config.max_subtasks_per_tech_task
+        )
+
+        return f"""
+        Please break down the following {task_type} into detailed subtasks.
+
+        Task Summary: {task_summary}
+        Epic Context: {epic_context['summary']}
+
+        Constraints:
+        - Create no more than {max_subtasks} subtasks
+        - Story points per subtask should be between {config.min_story_points} and {config.max_story_points}
+        - Focus on concrete, implementable units of work
+        - Include clear acceptance criteria for each subtask
+
+        Please provide the breakdown in the following format:
+
+        <subtasks>
+        [
+            {{
+                "title": "Subtask title",
+                "description": "Detailed description",
+                "acceptance_criteria": ["Criterion 1", "Criterion 2"],
+                "story_points": story_points_value,
+                "required_skills": ["Skill 1", "Skill 2"],
+                "dependencies": ["Dependency 1"],
+                "suggested_assignee": "Role or skill level"
+            }},
+            ...
+        ]
+        </subtasks>
+        """ 

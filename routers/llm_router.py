@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from typing import Dict, Any, List
 from services.jira_breakdown_service import JiraBreakdownService
 from services.jira_orchestration_service import JiraOrchestrationService
@@ -20,12 +20,21 @@ from models import (
 from loguru import logger
 from datetime import datetime
 import sqlite3
+from services.debug_service import (
+    DebugService, 
+    ExecutionNotFoundError,
+    ProposalNotFoundError
+)
+from config.breakdown_config import BreakdownConfig
 
 router = APIRouter()
 jira_breakdown_service = JiraBreakdownService()
 jira_orchestration_service = JiraOrchestrationService()
 response_formatter = ResponseFormatterService()
 revision_service = RevisionService()
+
+# Initialize services
+debug_service = DebugService()
 
 @router.post(
     "/generate-description/", 
@@ -55,11 +64,29 @@ async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
         ticket_description=request.ticket_description
     )
 
-@router.post("/break-down-epic/{epic_key}", response_model=JiraEpicBreakdownResult)
-async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
+@router.post("/break-down-epic/{epic_key}")
+async def break_down_epic(
+    epic_key: str,
+    max_user_stories: int = Query(default=5, ge=1, le=10),
+    max_technical_tasks: int = Query(default=3, ge=1, le=8),
+    max_subtasks_per_story: int = Query(default=4, ge=1, le=8),
+    max_subtasks_per_tech_task: int = Query(default=3, ge=1, le=6),
+    min_story_points: int = Query(default=1, ge=1, le=5),
+    max_story_points: int = Query(default=8, ge=2, le=13)
+) -> JiraEpicBreakdownResult:
     """Break down a JIRA epic into smaller tasks"""
     try:
-        result = await jira_breakdown_service.break_down_epic(epic_key)
+        # Create config from parameters
+        config = BreakdownConfig(
+            max_user_stories=max_user_stories,
+            max_technical_tasks=max_technical_tasks,
+            max_subtasks_per_story=max_subtasks_per_story,
+            max_subtasks_per_tech_task=max_subtasks_per_tech_task,
+            min_story_points=min_story_points,
+            max_story_points=max_story_points
+        )
+        
+        result = await jira_breakdown_service.break_down_epic(epic_key, config)
         return response_formatter.format_epic_breakdown(result)
         
     except Exception as e:
@@ -108,39 +135,39 @@ async def request_plan_revision(request: RevisionRequest) -> RevisionConfirmatio
         logger.info(f"Received revision request for execution: {request.execution_id}")
         logger.debug(f"Request data: {request.dict()}")
         
-        # Validate the request has content
+        # Validate the request
         if not request.revision_request.strip():
             raise HTTPException(
                 status_code=400,
                 detail="Revision request cannot be empty"
             )
         
-        # Get execution record to get epic_key
+        # Get execution record
         execution = await revision_service.execution_tracker.get_execution_record(request.execution_id)
         
-        # Generate a temporary revision ID
+        # Generate revision ID
         temp_revision_id = str(uuid7())
         
-        # Add more logging
-        logger.debug("Calling interpret_revision_request...")
+        # Get interpreted changes for specific task
         interpreted_changes = await revision_service.interpret_revision_request(
             execution_id=request.execution_id,
+            high_level_task_id=request.high_level_task_id,
             revision_request=request.revision_request
         )
-        
-        logger.debug(f"Got interpreted changes: {interpreted_changes}")
         
         await revision_service.store_revision_request(
             temp_revision_id=temp_revision_id,
             original_execution_id=request.execution_id,
+            high_level_task_id=request.high_level_task_id,  # Store which task is being modified
             interpreted_changes=interpreted_changes,
-            epic_key=execution.epic_key  # Pass the epic_key from execution record
+            epic_key=execution.epic_key
         )
         
         return RevisionConfirmation(
             original_execution_id=request.execution_id,
             interpreted_changes=interpreted_changes,
-            temp_revision_id=temp_revision_id
+            temp_revision_id=temp_revision_id,
+            high_level_task_id=request.high_level_task_id  # Include in response
         )
         
     except Exception as e:
@@ -225,26 +252,12 @@ async def apply_revision(
             detail=f"Failed to apply revision: {str(e)}"
         )
 
-@router.get(
-    "/debug/executions",
-    summary="Debug endpoint to view execution records",
-    description="Lists all execution records in the database"
-)
+@router.get("/debug/executions")
 async def list_executions():
     """List all execution records for debugging"""
     try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM executions ORDER BY created_at DESC")
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            
-            return {
-                "executions": [
-                    dict(zip(columns, row))
-                    for row in rows
-                ]
-            }
+        executions = await debug_service.list_executions()
+        return {"executions": executions}
     except Exception as e:
         logger.error(f"Failed to list executions: {str(e)}")
         raise HTTPException(
@@ -252,26 +265,12 @@ async def list_executions():
             detail=f"Failed to list executions: {str(e)}"
         )
 
-@router.get(
-    "/debug/revisions",
-    summary="Debug endpoint to view revision records",
-    description="Lists all revision records in the database"
-)
+@router.get("/debug/revisions")
 async def list_revisions():
     """List all revision records for debugging"""
     try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM revisions ORDER BY created_at DESC")
-            columns = [description[0] for description in cursor.description]
-            rows = cursor.fetchall()
-            
-            return {
-                "revisions": [
-                    dict(zip(columns, row))
-                    for row in rows
-                ]
-            }
+        revisions = await debug_service.list_revisions()
+        return {"revisions": revisions}
     except Exception as e:
         logger.error(f"Failed to list revisions: {str(e)}")
         raise HTTPException(
@@ -283,43 +282,66 @@ async def list_revisions():
 async def get_execution_details(execution_id: str):
     """Get execution record and its revision history by ID"""
     try:
-        with sqlite3.connect(DATABASE["sqlite"]["path"]) as conn:
-            cursor = conn.cursor()
-            
-            # Get execution record
-            cursor.execute("""
-                SELECT * FROM executions 
-                WHERE execution_id = ?
-            """, (execution_id,))
-            columns = [description[0] for description in cursor.description]
-            execution_row = cursor.fetchone()
-            
-            if not execution_row:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No execution found with ID: {execution_id}"
-                )
-            
-            # Get revision history
-            cursor.execute("""
-                SELECT * FROM revisions 
-                WHERE execution_id = ? 
-                ORDER BY created_at DESC
-            """, (execution_id,))
-            revision_columns = [description[0] for description in cursor.description]
-            revision_rows = cursor.fetchall()
-            
-            return {
-                "execution": dict(zip(columns, execution_row)),
-                "revisions": [
-                    dict(zip(revision_columns, row))
-                    for row in revision_rows
-                ]
-            }
-            
+        execution_details = await debug_service.get_execution_details(execution_id)
+        return execution_details
+    except ExecutionNotFoundError as e:
+        logger.warning(str(e))
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Failed to get execution details: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get execution details: {str(e)}"
+        )
+
+@router.get("/debug/proposals/{proposal_id}")
+async def get_proposal_details(proposal_id: str):
+    """Get details for a specific proposal"""
+    try:
+        return await debug_service.get_proposal_details(proposal_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get proposal details: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get proposal details: {str(e)}"
+        )
+
+@router.get(
+    "/debug/executions/{execution_id}/proposals",
+    summary="Get proposals for execution",
+    description="Get all proposals associated with an execution ID"
+)
+async def get_execution_proposals(execution_id: str):
+    """Get all proposals for an execution"""
+    try:
+        return await debug_service.get_execution_proposals(execution_id)
+    except ExecutionNotFoundError as e:
+        logger.warning(str(e))
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Failed to get execution proposals: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get execution proposals: {str(e)}"
+        )
+
+@router.get("/debug/proposals")
+async def list_proposals():
+    """List all proposal records for debugging"""
+    try:
+        proposals = await debug_service.list_proposals()
+        return {"proposals": proposals}
+    except Exception as e:
+        logger.error(f"Failed to list proposals: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list proposals: {str(e)}"
         ) 

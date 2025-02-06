@@ -12,6 +12,7 @@ from services.execution_tracker_service import ExecutionRecord
 import sqlite3
 import re
 from config.database import DATABASE
+from services.proposed_tickets_service import ProposedTicketsService
 
 @dataclass
 class RevisionDetails:
@@ -33,34 +34,46 @@ class RevisionService:
         self.llm = VertexLLM()
         self.temp_dir = "temp_revisions"
         self.execution_tracker = ExecutionTrackerService()
+        self.proposed_tickets = ProposedTicketsService()
         self.db_file = DATABASE["sqlite"]["path"]  # Add database path from config
         os.makedirs(self.temp_dir, exist_ok=True)
     
     async def interpret_revision_request(
         self,
         execution_id: str,
+        high_level_task_id: str,
         revision_request: str
     ) -> str:
-        """Have LLM interpret the revision request"""
+        """Have LLM interpret the revision request for a specific user story"""
         try:
-            # Add debug logging to see what we're loading
             logger.debug(f"Loading proposed tickets for execution: {execution_id}")
             
-            # Load the original proposed tickets
-            original_tickets = await self._load_proposed_tickets(execution_id)
-            logger.debug(f"Loaded tickets: {original_tickets}")
+            # Load all tickets but extract only the requested task and its subtasks
+            all_tickets = await self._load_proposed_tickets(execution_id)
             
-            # Build the prompt with more context
+            # Find the specific task and its subtasks
+            target_task = None
+            for task in all_tickets:
+                if task.get("id") == high_level_task_id:
+                    target_task = task
+                    break
+                    
+            if not target_task:
+                raise ValueError(f"No task found with ID {high_level_task_id}")
+            
+            # Build the prompt with focused context
             prompt = f"""
-            Please interpret and structure the following revision request for a JIRA ticket structure.
+            Please interpret and structure the following revision request for a specific JIRA user story/task.
             
-            Current Ticket Structure:
-            {yaml.dump(original_tickets, sort_keys=False)}
+            Current Task Structure:
+            {yaml.dump(target_task, sort_keys=False)}
             
             User's Revision Request:
             {revision_request}
             
             Please analyze the request and provide a clear, structured interpretation of the changes needed.
+            Focus only on changes to this specific task and its subtasks.
+            
             Format your response as follows:
 
             <interpretation>
@@ -70,8 +83,9 @@ class RevisionService:
             ...
 
             Impact Analysis:
-            - Tasks Affected: [List affected tasks]
-            - New Tasks Required: [Yes/No, with details]
+            - Task Components Affected: [List affected components of this task]
+            - Subtasks Modified: [List affected subtasks]
+            - New Subtasks Required: [Yes/No, with details]
             - Dependencies Modified: [Yes/No, with details]
             
             Implementation Plan:
@@ -79,10 +93,7 @@ class RevisionService:
             </interpretation>
             """
             
-            # Log the prompt for debugging
-            logger.debug(f"Generated prompt: {prompt}")
-            
-            # Get response - already returns text string
+            # Get LLM response
             response = await self.llm.generate_content(
                 prompt,
                 temperature=0.2,
@@ -90,17 +101,14 @@ class RevisionService:
                 top_k=40
             )
             
-            # Log the response
             logger.debug(f"LLM Response: {response}")
-            
-            # Return the response directly since it's already text
             return response
             
         except Exception as e:
             logger.error(f"Failed to interpret revision request: {str(e)}")
             logger.error(f"Execution ID: {execution_id}")
+            logger.error(f"Task ID: {high_level_task_id}")
             logger.error(f"Revision request: {revision_request}")
-            logger.error(f"Original tickets: {original_tickets if 'original_tickets' in locals() else 'Not loaded'}")
             raise
 
     async def store_revision_request(
@@ -162,15 +170,9 @@ class RevisionService:
                 original_execution_id
             )
             
-            # Generate new filenames with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_execution_file = f"execution_plans/EXECUTION_{original_execution.epic_key}_{timestamp}.md"
-            new_proposed_file = f"proposed_tickets/PROPOSED_{original_execution.epic_key}_{timestamp}.yaml"
-            
             # Load original proposed tickets
-            with open(original_execution.proposed_plan_file, 'r') as f:
-                original_tickets = yaml.safe_load(f)
-                
+            original_tickets = await self._load_proposed_tickets(original_execution_id)
+            
             # Build prompt for LLM to apply changes
             prompt = f"""
             Please update the following JIRA ticket structure based on the requested changes.
@@ -223,31 +225,26 @@ class RevisionService:
             if not yaml_match or not plan_match:
                 raise ValueError("Failed to get valid response from LLM")
             
-            # Validate YAML structure has required fields
+            # Parse the updated tickets
             yaml_content = yaml_match.group(1).strip()
             proposed_tickets = yaml.safe_load(yaml_content)
             
-            required_fields = ['execution_id', 'parent_execution_id', 'epic_key', 'timestamp']
-            missing_fields = [field for field in required_fields if field not in proposed_tickets]
-            if missing_fields:
-                raise ValueError(f"LLM response missing required fields: {', '.join(missing_fields)}")
-                
-            # Save new proposed tickets YAML
-            os.makedirs(os.path.dirname(new_proposed_file), exist_ok=True)
-            with open(new_proposed_file, 'w') as f:
-                f.write(yaml_content)
-                
-            # Save new execution plan
-            os.makedirs(os.path.dirname(new_execution_file), exist_ok=True)
-            with open(new_execution_file, 'w') as f:
-                f.write(plan_match.group(1).strip())
-                
-            # Create new execution record with link to parent
+            # Store the new proposal in database
+            new_proposal_id = await self.proposed_tickets.store_proposal(
+                execution_id=new_execution_id,
+                epic_key=original_execution.epic_key,
+                high_level_tasks=proposed_tickets["tasks"],  # Adjust based on your YAML structure
+                parent_proposal_id=original_execution_id  # Link to parent
+            )
+            
+            logger.debug(f"Stored new proposal {new_proposal_id} for execution {new_execution_id}")
+            
+            # Create new execution record
             new_execution = await self.execution_tracker.create_execution_record(
                 execution_id=new_execution_id,
                 epic_key=original_execution.epic_key,
-                execution_plan_file=new_execution_file,
-                proposed_plan_file=new_proposed_file,
+                execution_plan_file=plan_match.group(1).strip(),
+                proposed_plan_file=yaml_content,
                 parent_execution_id=original_execution_id
             )
             
@@ -266,29 +263,8 @@ class RevisionService:
             raise
 
     async def _load_proposed_tickets(self, execution_id: str) -> Dict[str, Any]:
-        """Load the proposed tickets YAML file for an execution"""
-        try:
-            # Get execution record to find the file
-            logger.debug(f"Getting execution record for: {execution_id}")
-            execution = await self.execution_tracker.get_execution_record(execution_id)
-            
-            # Log the file path
-            logger.debug(f"Looking for proposed tickets file: {execution.proposed_plan_file}")
-            
-            # Load and parse YAML file
-            if not os.path.exists(execution.proposed_plan_file):
-                raise FileNotFoundError(f"Proposed tickets file not found: {execution.proposed_plan_file}")
-                
-            with open(execution.proposed_plan_file, 'r') as f:
-                tickets = yaml.safe_load(f)
-                
-            logger.debug(f"Loaded proposed tickets for execution {execution_id}: {tickets}")
-            return tickets
-            
-        except Exception as e:
-            logger.error(f"Failed to load proposed tickets for execution {execution_id}: {str(e)}")
-            logger.error(f"Current working directory: {os.getcwd()}")
-            raise
+        """Load the proposed tickets from database"""
+        return await self.proposed_tickets.get_proposal_by_execution(execution_id)
 
     async def confirm_revision_request(
         self,

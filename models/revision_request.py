@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field
 
 class RevisionRequest(BaseModel):
     """Request model for proposing changes to an execution plan"""
-    execution_id: str = Field(..., description="UUID of the execution to revise")
-    revision_request: str = Field(..., min_length=1, description="Description of the requested changes")
+    execution_id: str = Field(..., description="ID of the execution to revise")
+    high_level_task_id: str = Field(..., description="ID of the user story/high-level task to modify")
+    revision_request: str = Field(..., description="Description of requested changes")
     
     class Config:
         json_schema_extra = {
