@@ -25,6 +25,46 @@ class ExecutionLogService:
             f.write(f"## Epic: {epic_key}\n")
             f.write(f"## Started: {datetime.now().isoformat()}\n\n")
     
+    async def create_execution_record(
+        self,
+        execution_id: str,
+        epic_key: str,
+        execution_plan_file: str,
+        proposed_plan_file: str,
+        status: str
+    ) -> None:
+        """
+        Create a record of the execution attempt.
+        
+        Args:
+            execution_id: Unique identifier for this execution
+            epic_key: The JIRA epic key
+            execution_plan_file: Path to the execution plan file
+            proposed_plan_file: Path to the proposed tickets file
+            status: Status of the execution (SUCCESS/FAILED/FATAL_ERROR)
+        """
+        try:
+            # Log the execution record to the file
+            with open(self.filename, "a") as f:
+                f.write("\n## Execution Record\n\n")
+                f.write("```json\n")
+                record = {
+                    "execution_id": execution_id,
+                    "epic_key": epic_key,
+                    "execution_plan_file": execution_plan_file,
+                    "proposed_plan_file": proposed_plan_file,
+                    "status": status,
+                    "timestamp": datetime.now().isoformat()
+                }
+                f.write(json.dumps(record, indent=2))
+                f.write("\n```\n")
+                
+            logger.info(f"Created execution record for {execution_id} with status {status}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create execution record: {str(e)}")
+            raise
+    
     def log_section(self, title: str, content: str):
         """Log a new section to the execution plan"""
         try:

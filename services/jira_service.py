@@ -15,6 +15,21 @@ class JiraService:
         """Initialize JIRA service with proper authentication"""
         self.base_url = f"{os.getenv('JIRA_SERVER')}/rest/api/2"
         
+        self.set_headers_basic()
+        
+        # Create SSL context that doesn't verify
+        self.ssl_context = ssl.create_default_context()
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
+    
+    def set_headers(self):
+        self.headers = {
+            "Authorization": f"Bearer {os.getenv('JIRA_API_TOKEN')}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    
+    def set_headers_basic(self):
         # Get credentials from environment
         email = os.getenv('JIRA_EMAIL')
         api_token = os.getenv('JIRA_API_TOKEN')
@@ -31,14 +46,7 @@ class JiraService:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-        
-        # Create SSL context that doesn't verify
-        self.ssl_context = ssl.create_default_context()
-        self.ssl_context.check_hostname = False
-        self.ssl_context.verify_mode = ssl.CERT_NONE
-        
-        logger.debug(f"Initialized JIRA service for user: {email}")
-
+    
     async def get_ticket(self, ticket_key: str) -> Dict[str, Any]:
         """Get details of a specific JIRA ticket"""
         try:

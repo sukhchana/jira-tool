@@ -163,6 +163,15 @@ class JiraBreakdownService:
                 summary = task_tracker.get_summary()
                 self.execution_log.log_summary(summary)
                 
+                # Save successful execution record
+                await self.execution_log.create_execution_record(
+                    execution_id=execution_id,
+                    epic_key=self.epic_key,
+                    execution_plan_file=self.execution_log.filename,
+                    proposed_plan_file=self.proposed_tickets.filename,
+                    status="SUCCESS"
+                )
+                
                 return {
                     "execution_id": execution_id,
                     "epic_key": self.epic_key,

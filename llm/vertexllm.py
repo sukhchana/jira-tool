@@ -1,7 +1,6 @@
 # Only import bootstrap when not running as main
 if __name__ != "__main__":
     from utils import bootstrap  # This must be the first import
-    bootstrap.init()
 
 import os
 import asyncio

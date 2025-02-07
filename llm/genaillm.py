@@ -8,7 +8,6 @@ from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
 # Only import bootstrap when not running directly
 if __name__ != "__main__":
     from utils import bootstrap
-    bootstrap.init()
 
 class GenAILLM:
     """Interface for Google's Generative AI service using google-genai package"""
