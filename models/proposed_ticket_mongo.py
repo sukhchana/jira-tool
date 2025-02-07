@@ -13,7 +13,7 @@ class ProposedTicketMongo(BaseModel):
     # Common fields
     title: str
     description: str
-    acceptance_criteria: Optional[str] = None
+    acceptance_criteria: List[str] = Field(default_factory=list)
     story_points: Optional[int] = None
     required_skills: List[str] = Field(default_factory=list)
     suggested_assignee: Optional[str] = None
@@ -57,7 +57,7 @@ class ProposedTicketMongo(BaseModel):
                 "parent_id": None,
                 "title": "User Story - Login with Active Directory",
                 "description": "As a user, I want to log in using my Active Directory credentials",
-                "acceptance_criteria": "- User can log in with AD credentials\n- Invalid credentials show error",
+                "acceptance_criteria": ["- User can log in with AD credentials", "- Invalid credentials show error"],
                 "story_points": 5,
                 "required_skills": ["Python", "OAuth2", "Active Directory"],
                 "suggested_assignee": "Backend Developer",

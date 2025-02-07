@@ -97,13 +97,18 @@ class MongoDBService:
                 # Process subtasks if any
                 subtasks = yaml_data.get('subtasks', {}).get(story['name'], [])
                 for subtask in subtasks:
+                    # Ensure acceptance criteria is a list
+                    acceptance_criteria = subtask.get('acceptance_criteria', [])
+                    if isinstance(acceptance_criteria, str):
+                        acceptance_criteria = [acceptance_criteria]
+                    
                     subtask_doc = ProposedTicketMongo(
                         ticket_id=subtask['id'],
                         ticket_type='SUB_TASK',
                         parent_id=story['id'],
                         title=subtask['title'],
                         description=subtask['description'],
-                        acceptance_criteria=subtask.get('acceptance_criteria'),
+                        acceptance_criteria=acceptance_criteria,
                         story_points=subtask.get('story_points'),
                         required_skills=subtask.get('required_skills', []),
                         suggested_assignee=subtask.get('suggested_assignee'),
@@ -141,13 +146,18 @@ class MongoDBService:
                 # Process subtasks if any
                 subtasks = yaml_data.get('subtasks', {}).get(task['name'], [])
                 for subtask in subtasks:
+                    # Ensure acceptance criteria is a list
+                    acceptance_criteria = subtask.get('acceptance_criteria', [])
+                    if isinstance(acceptance_criteria, str):
+                        acceptance_criteria = [acceptance_criteria]
+                        
                     subtask_doc = ProposedTicketMongo(
                         ticket_id=subtask['id'],
                         ticket_type='SUB_TASK',
                         parent_id=task['id'],
                         title=subtask['title'],
                         description=subtask['description'],
-                        acceptance_criteria=subtask.get('acceptance_criteria'),
+                        acceptance_criteria=acceptance_criteria,
                         story_points=subtask.get('story_points'),
                         required_skills=subtask.get('required_skills', []),
                         suggested_assignee=subtask.get('suggested_assignee'),
@@ -265,7 +275,7 @@ if __name__ == "__main__":
     try:
         logger.info("Starting MongoDB service test")
         service = MongoDBService()
-        yaml_file = "proposed_tickets/PROPOSED_DP-7_20250206_032002.yaml"
+        yaml_file = "proposed_tickets/PROPOSED_DP-7_20250207_140330.yaml"
         
         if not os.path.exists(yaml_file):
             logger.error(f"YAML file not found: {yaml_file}")
