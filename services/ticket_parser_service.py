@@ -86,7 +86,7 @@ class TicketParserService:
                         scenario["name"] = name_match.group(1).strip()
                     
                     # Get steps
-                    steps = re.finditer(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', block.group(0))
+                    steps = re.findall(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', block.group(0))
                     for step in steps:
                         scenario["steps"].append({
                             "keyword": step.group(1),
@@ -245,6 +245,241 @@ class TicketParserService:
             return None
 
     @staticmethod
+    def _extract_code_blocks(content: str) -> List[Dict[str, str]]:
+        """Extract code blocks with their language from content"""
+        code_blocks = []
+        
+        # Match JIRA-style code blocks: {code:language}...{code}
+        jira_matches = re.finditer(r'\{code:(\w+)\}(.*?)\{code\}', content, re.DOTALL)
+        for match in jira_matches:
+            code_blocks.append({
+                "language": match.group(1),
+                "code": match.group(2).strip()
+            })
+        
+        # Match markdown-style code blocks: ```language...```
+        markdown_matches = re.finditer(r'```(\w*)\n(.*?)```', content, re.DOTALL)
+        for match in markdown_matches:
+            language = match.group(1) or 'text'  # Default to 'text' if no language specified
+            code_blocks.append({
+                "language": language,
+                "code": match.group(2).strip()
+            })
+            
+        return code_blocks
+
+    @staticmethod
+    def _extract_implementation_details(content: str) -> Dict[str, Any]:
+        """Extract implementation details section from content"""
+        details = {
+            "technical_approach": "",
+            "code_blocks": [],
+            "key_considerations": []
+        }
+        
+        # Find Implementation Details section - handle both numbered and unnumbered formats
+        impl_patterns = [
+            r'Implementation Details:?(.*?)(?=\n\*\*\w+:|$)',  # Technical tasks format
+            r'Implementation Overview:(.*?)(?=\nTechnical Domain|$)',  # User stories format
+            r'Implementation Details:(.*?)(?=\nAcceptance Criteria|$)'  # Subtasks format
+        ]
+        
+        impl_content = None
+        for pattern in impl_patterns:
+            impl_match = re.search(pattern, content, re.DOTALL)
+            if impl_match:
+                impl_content = impl_match.group(1).strip()
+                break
+                
+        if impl_content:
+            # Extract Technical Approach - handle both numbered and unnumbered formats
+            approach_patterns = [
+                r'(?:Technical Approach:|1\.)(.*?)(?=\n\d\.|$)',
+                r'Technical Approach:(.*?)(?=\n\d\.|Example Implementation|$)',
+                r'(?:Implementation Strategy:|1\.)(.*?)(?=\n\d\.|Code Considerations|$)'
+            ]
+            
+            for pattern in approach_patterns:
+                tech_approach = re.search(pattern, impl_content, re.DOTALL)
+                if tech_approach:
+                    details["technical_approach"] = tech_approach.group(1).strip()
+                    break
+            
+            # Extract code blocks
+            details["code_blocks"] = TicketParserService._extract_code_blocks(impl_content)
+            
+            # Extract key considerations - handle various formats
+            considerations_patterns = [
+                r'(?:Key implementation steps:|Key Implementation Considerations:|3\.)(.*?)(?=\n\*\*\w+:|$)',
+                r'Key Implementation Considerations:(.*?)(?=\n\w+:|$)',
+                r'(?:Testing Approach:|3\.)(.*?)(?=\n\w+:|$)'
+            ]
+            
+            for pattern in considerations_patterns:
+                considerations_match = re.search(pattern, impl_content, re.DOTALL)
+                if considerations_match:
+                    considerations = considerations_match.group(1).strip()
+                    details["key_considerations"] = [
+                        c.strip('- ').strip()
+                        for c in considerations.split('\n')
+                        if c.strip('- ').strip()
+                    ]
+                    break
+        
+        return details
+
+    @staticmethod
+    def parse_user_stories(response: str) -> List[Dict[str, Any]]:
+        """Parse user stories including implementation details from LLM response"""
+        stories = []
+        try:
+            story_matches = re.findall(r'<user_story>(.*?)</user_story>', response, re.DOTALL)
+            
+            for story in story_matches:
+                # Extract basic story information
+                task_name = re.search(r'Task:\s*(.+?)(?=\n|$)', story)
+                description = re.search(r'Description:\s*(.+?)(?=\n|Implementation Overview|Technical)', story)
+                domain = re.search(r'Technical Domain:\s*(.+?)(?=\n|$)', story)
+                complexity = re.search(r'Complexity:\s*(.+?)(?=\n|$)', story)
+                value = re.search(r'Business Value:\s*(.+?)(?=\n|$)', story)
+                dependencies = re.search(r'Dependencies:\s*(.+?)(?=\n|Modern)', story)
+                modern_approaches = re.search(r'Modern Approaches:\s*(.+?)(?=\n|$)', story)
+                accessibility = re.search(r'Accessibility Requirements:\s*(.+?)(?=\n|$)', story)
+                integration = re.search(r'Integration Points:\s*(.+?)(?=\n|$)', story)
+                
+                # Extract User Experience section
+                ux_section = re.search(r'User Experience:(.*?)(?=\nScenarios:|$)', story, re.DOTALL)
+                ux_details = {}
+                if ux_section:
+                    pain_points = re.search(r'Current Pain Points:\s*(.+?)(?=\n|$)', ux_section.group(1))
+                    success_metrics = re.search(r'Success Metrics:\s*(.+?)(?=\n|$)', ux_section.group(1))
+                    similar_impl = re.search(r'Similar Implementations:\s*(.+?)(?=\n|$)', ux_section.group(1))
+                    ux_details = {
+                        "pain_points": pain_points.group(1).strip() if pain_points else "",
+                        "success_metrics": success_metrics.group(1).strip() if success_metrics else "",
+                        "similar_implementations": similar_impl.group(1).strip() if similar_impl else ""
+                    }
+                
+                # Extract implementation details
+                implementation_details = TicketParserService._extract_implementation_details(story)
+                
+                # Extract scenarios
+                scenarios_text = re.search(r'Scenarios:(.*?)(?=</user_story>|$)', story, re.DOTALL)
+                scenarios = []
+                
+                if scenarios_text:
+                    scenario_matches = re.findall(r'Scenario:.*?(?=Scenario:|$)', scenarios_text.group(1), re.DOTALL)
+                    for scenario in scenario_matches:
+                        scenario_dict = {
+                            "name": re.search(r'Scenario:\s*(.+?)(?=\n|$)', scenario).group(1).strip(),
+                            "steps": []
+                        }
+                        
+                        steps = re.findall(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', scenario)
+                        for keyword, step_text in steps:
+                            scenario_dict["steps"].append({
+                                "keyword": keyword,
+                                "text": step_text.strip()
+                            })
+                        
+                        scenarios.append(scenario_dict)
+                
+                if task_name and description:
+                    stories.append({
+                        "type": "User Story",
+                        "name": task_name.group(1).strip(),
+                        "description": description.group(1).strip(),
+                        "technical_domain": domain.group(1).strip() if domain else "",
+                        "complexity": complexity.group(1).strip() if complexity else "Medium",
+                        "business_value": value.group(1).strip() if value else "Medium",
+                        "dependencies": [d.strip() for d in dependencies.group(1).split(',')] if dependencies else [],
+                        "modern_approaches": modern_approaches.group(1).strip() if modern_approaches else "",
+                        "accessibility_requirements": accessibility.group(1).strip() if accessibility else "",
+                        "integration_points": integration.group(1).strip() if integration else "",
+                        "implementation_details": implementation_details,
+                        "user_experience": ux_details,
+                        "scenarios": scenarios
+                    })
+                
+            return stories
+            
+        except Exception as e:
+            logger.error(f"Failed to parse user stories: {str(e)}")
+            logger.error(f"Response that caused error:\n{response}")
+            return []
+
+    @staticmethod
+    def parse_technical_tasks(response: str) -> List[Dict[str, Any]]:
+        """Parse technical tasks from LLM response"""
+        tasks = []
+        try:
+            logger.debug("Starting to parse technical tasks")
+            logger.debug(f"Raw response:\n{response}")
+            
+            # Extract technical tasks
+            task_matches = re.findall(r'<technical_task>\n?(.*?)</technical_task>', response, re.DOTALL)
+            logger.debug(f"Found {len(task_matches)} technical tasks")
+            
+            for task in task_matches:
+                try:
+                    # Extract fields using more flexible patterns
+                    fields = {
+                        "task_name": re.search(r'\*\*Task:\*\*\s*(?:Technical Task - )?(.*?)(?=\n\*\*|\n\s*Implementation Details|\n\s*$)', task, re.DOTALL),
+                        "description": re.search(r'\*\*Description:\*\*\s*(.*?)(?=\n\*\*|\n\s*Implementation Details|\n\s*$)', task, re.DOTALL),
+                        "technical_domain": re.search(r'\*\*Technical Domain:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task),
+                        "complexity": re.search(r'\*\*Complexity:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task),
+                        "dependencies": re.search(r'\*\*Dependencies:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task),
+                        "implementation_notes": re.search(r'\*\*Implementation Notes:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task),
+                        "modern_practices": re.search(r'\*\*Modern Practices:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task),
+                        "security_considerations": re.search(r'\*\*Security Considerations:\*\*\s*(.*?)(?=\n\*\*|\n\s*$)', task)
+                    }
+                    
+                    # Log raw field matches for debugging
+                    logger.debug("Raw field matches:")
+                    for field, match in fields.items():
+                        logger.debug(f"{field}: {match.group(1) if match else 'None'}")
+                    
+                    # Extract implementation details
+                    implementation_details = TicketParserService._extract_implementation_details(task)
+                    
+                    # Check required fields
+                    required_fields = ["task_name", "description", "technical_domain", "complexity"]
+                    missing = [field for field in required_fields if not fields[field]]
+                    
+                    if not missing:
+                        parsed_task = {
+                            "type": "Technical Task",
+                            "name": f"Technical Task - {fields['task_name'].group(1).strip()}",
+                            "description": fields['description'].group(1).strip(),
+                            "technical_domain": fields['technical_domain'].group(1).strip(),
+                            "complexity": fields['complexity'].group(1).strip(),
+                            "dependencies": [d.strip() for d in fields['dependencies'].group(1).split(',')] if fields['dependencies'] else [],
+                            "implementation_notes": fields['implementation_notes'].group(1).strip() if fields['implementation_notes'] else "",
+                            "modern_practices": fields['modern_practices'].group(1).strip() if fields['modern_practices'] else "",
+                            "security_considerations": fields['security_considerations'].group(1).strip() if fields['security_considerations'] else "",
+                            "implementation_details": implementation_details
+                        }
+                        tasks.append(parsed_task)
+                        logger.debug(f"Successfully parsed task: {parsed_task['name']}")
+                        logger.debug(f"Task details: {json.dumps(parsed_task, indent=2)}")
+                    else:
+                        logger.warning(f"Skipping task due to missing required fields: {', '.join(missing)}")
+                        logger.warning(f"Task content:\n{task}")
+                
+                except Exception as e:
+                    logger.error(f"Failed to parse individual task: {str(e)}")
+                    logger.error(f"Task content that caused error:\n{task}")
+                    continue
+            
+            logger.debug(f"Successfully parsed {len(tasks)} technical tasks")
+            return tasks
+            
+        except Exception as e:
+            logger.error(f"Failed to parse technical tasks: {str(e)}")
+            logger.error(f"Response that caused error:\n{response}")
+            return []
+
+    @staticmethod
     def parse_subtasks(text: str) -> List[Dict[str, Any]]:
         """Parse the subtasks response into structured format"""
         subtasks = []
@@ -261,11 +496,12 @@ class TicketParserService:
                     subtask = {
                         "title": "",
                         "description": "",
-                        "acceptance_criteria": "",
+                        "acceptance_criteria": [],
                         "story_points": 1,  # Default value
                         "required_skills": [],
                         "dependencies": [],
-                        "suggested_assignee": "Unassigned"  # Default value
+                        "suggested_assignee": "Unassigned",  # Default value
+                        "implementation_details": {}
                     }
                     
                     # Parse each field
@@ -273,13 +509,22 @@ class TicketParserService:
                     if title_match:
                         subtask["title"] = title_match.group(1).strip()
                     
-                    desc_match = re.search(r'Description:\s*(.+?)(?=\n|$)', subtask_content, re.DOTALL)
+                    desc_match = re.search(r'Description:\s*(.+?)(?=\n\s*Implementation Details|$)', subtask_content, re.DOTALL)
                     if desc_match:
                         subtask["description"] = desc_match.group(1).strip()
                     
-                    ac_match = re.search(r'Acceptance Criteria:\s*(.+?)(?=\n|$)', subtask_content, re.DOTALL)
-                    if ac_match:
-                        subtask["acceptance_criteria"] = ac_match.group(1).strip()
+                    # Extract implementation details
+                    subtask["implementation_details"] = TicketParserService._extract_implementation_details(subtask_content)
+                    
+                    # Parse acceptance criteria
+                    ac_section = re.search(r'Acceptance Criteria:(.*?)(?=\n\s*Story Points|$)', subtask_content, re.DOTALL)
+                    if ac_section:
+                        criteria = [
+                            c.strip('- ').strip()
+                            for c in ac_section.group(1).strip().split('\n')
+                            if c.strip('- ').strip()
+                        ]
+                        subtask["acceptance_criteria"] = criteria
                     
                     points_match = re.search(r'Story Points:\s*(\d+)', subtask_content)
                     if points_match:
@@ -316,117 +561,4 @@ class TicketParserService:
         except Exception as e:
             logger.error(f"Failed to parse subtasks: {str(e)}")
             logger.error(f"Full text that caused error:\n{text}")
-            return []
-
-    @staticmethod
-    def parse_user_stories(response: str) -> List[Dict[str, Any]]:
-        """Parse user stories including Gherkin scenarios from LLM response"""
-        stories = []
-        try:
-            story_matches = re.findall(r'<user_story>(.*?)</user_story>', response, re.DOTALL)
-            
-            for story in story_matches:
-                # Extract basic story information
-                task_name = re.search(r'Task:\s*(.+?)(?=\n|$)', story)
-                description = re.search(r'Description:\s*(.+?)(?=\n|Technical)', story)
-                domain = re.search(r'Technical Domain:\s*(.+?)(?=\n|$)', story)
-                complexity = re.search(r'Complexity:\s*(.+?)(?=\n|$)', story)
-                value = re.search(r'Business Value:\s*(.+?)(?=\n|$)', story)
-                dependencies = re.search(r'Dependencies:\s*(.+?)(?=\n|Scenarios)', story)
-                
-                # Extract scenarios
-                scenarios_text = re.search(r'Scenarios:(.*?)(?=</user_story>|$)', story, re.DOTALL)
-                scenarios = []
-                
-                if scenarios_text:
-                    scenario_matches = re.findall(r'Scenario:.*?(?=Scenario:|$)', scenarios_text.group(1), re.DOTALL)
-                    for scenario in scenario_matches:
-                        scenario_dict = {
-                            "name": re.search(r'Scenario:\s*(.+?)(?=\n|$)', scenario).group(1).strip(),
-                            "steps": []
-                        }
-                        
-                        # Extract steps maintaining Gherkin keywords
-                        steps = re.findall(r'(Given|When|Then|And)\s+(.+?)(?=\n|$)', scenario)
-                        for keyword, step_text in steps:
-                            scenario_dict["steps"].append({
-                                "keyword": keyword,
-                                "text": step_text.strip()
-                            })
-                        
-                        scenarios.append(scenario_dict)
-                
-                if task_name and description:
-                    stories.append({
-                        "type": "User Story",
-                        "name": task_name.group(1).strip(),
-                        "description": description.group(1).strip(),
-                        "technical_domain": domain.group(1).strip() if domain else "",
-                        "complexity": complexity.group(1).strip() if complexity else "Medium",
-                        "business_value": value.group(1).strip() if value else "Medium",
-                        "dependencies": [d.strip() for d in dependencies.group(1).split(',')] if dependencies else [],
-                        "scenarios": scenarios
-                    })
-                
-            return stories
-            
-        except Exception as e:
-            logger.error(f"Failed to parse user stories: {str(e)}")
-            logger.error(f"Response that caused error:\n{response}")
-            return []
-
-    @staticmethod
-    def parse_technical_tasks(response: str) -> List[Dict[str, Any]]:
-        """Parse technical tasks from LLM response"""
-        tasks = []
-        try:
-            logger.debug("Starting to parse technical tasks")
-            logger.debug(f"Raw response:\n{response}")
-            
-            # Extract technical tasks
-            task_matches = re.findall(r'<technical_task>\n?(.*?)</technical_task>', response, re.DOTALL)
-            logger.debug(f"Found {len(task_matches)} technical tasks")
-            
-            for task in task_matches:
-                try:
-                    # Extract required fields using updated patterns
-                    task_name = re.search(r'\*\*Task:\*\* (?:Technical Task - )?(.*?)(?=\n|\*\*)', task)
-                    description = re.search(r'\*\*Description:\*\* (.*?)(?=\n|\*\*)', task)
-                    domain = re.search(r'\*\*Technical Domain:\*\* (.*?)(?=\n|\*\*)', task)
-                    complexity = re.search(r'\*\*Complexity:\*\* (.*?)(?=\n|\*\*)', task)
-                    dependencies = re.search(r'\*\*Dependencies:\*\* (.*?)(?=\n|\*\*)', task)
-                    impl_notes = re.search(r'\*\*Implementation Notes:\*\* (.*?)(?=\n|\*\*|$)', task, re.DOTALL)
-                    
-                    if task_name and description and domain and complexity:
-                        parsed_task = {
-                            "type": "Technical Task",
-                            "name": f"Technical Task - {task_name.group(1).strip()}",
-                            "description": description.group(1).strip(),
-                            "technical_domain": domain.group(1).strip(),
-                            "complexity": complexity.group(1).strip(),
-                            "dependencies": [d.strip() for d in dependencies.group(1).split(',')] if dependencies else [],
-                            "implementation_notes": impl_notes.group(1).strip() if impl_notes else ""
-                        }
-                        tasks.append(parsed_task)
-                        logger.debug(f"Successfully parsed task: {parsed_task['name']}")
-                    else:
-                        missing = []
-                        if not task_name: missing.append("task name")
-                        if not description: missing.append("description")
-                        if not domain: missing.append("domain")
-                        if not complexity: missing.append("complexity")
-                        logger.warning(f"Skipping task due to missing fields: {', '.join(missing)}")
-                        logger.warning(f"Task content:\n{task}")
-                
-                except Exception as e:
-                    logger.error(f"Failed to parse individual task: {str(e)}")
-                    logger.error(f"Task content that caused error:\n{task}")
-                    continue
-            
-            logger.debug(f"Successfully parsed {len(tasks)} technical tasks")
-            return tasks
-            
-        except Exception as e:
-            logger.error(f"Failed to parse technical tasks: {str(e)}")
-            logger.error(f"Response that caused error:\n{response}")
             return [] 

@@ -83,6 +83,11 @@ class MongoDBService:
                     business_value=story.get('business_value'),
                     implementation_notes=story.get('implementation_notes'),
                     scenarios=story.get('scenarios', []),
+                    modern_approaches=story.get('modern_approaches'),
+                    accessibility_requirements=story.get('accessibility_requirements'),
+                    integration_points=story.get('integration_points'),
+                    user_experience=story.get('user_experience', {}),
+                    implementation_details=story.get('implementation_details', {}),
                     epic_key=epic_key,
                     execution_id=execution_id
                 )
@@ -103,6 +108,7 @@ class MongoDBService:
                         required_skills=subtask.get('required_skills', []),
                         suggested_assignee=subtask.get('suggested_assignee'),
                         dependencies=subtask.get('dependencies', []),
+                        implementation_details=subtask.get('implementation_details', {}),
                         epic_key=epic_key,
                         execution_id=execution_id
                     )
@@ -123,6 +129,9 @@ class MongoDBService:
                     complexity=task.get('complexity'),
                     dependencies=task.get('dependencies', []),
                     implementation_notes=task.get('implementation_notes'),
+                    modern_practices=task.get('modern_practices'),
+                    security_considerations=task.get('security_considerations'),
+                    implementation_details=task.get('implementation_details', {}),
                     epic_key=epic_key,
                     execution_id=execution_id
                 )
@@ -143,6 +152,7 @@ class MongoDBService:
                         required_skills=subtask.get('required_skills', []),
                         suggested_assignee=subtask.get('suggested_assignee'),
                         dependencies=subtask.get('dependencies', []),
+                        implementation_details=subtask.get('implementation_details', {}),
                         epic_key=epic_key,
                         execution_id=execution_id
                     )

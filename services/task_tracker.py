@@ -83,3 +83,23 @@ class TaskTracker:
             state += f"- {parent}: {len(subtasks)} subtasks\n"
         
         return state 
+
+    def update_task_dependencies(self, task_name: str, resolved_dependencies: List[str]) -> None:
+        """
+        Update the dependencies of a task with resolved IDs.
+        
+        Args:
+            task_name: Name of the task to update
+            resolved_dependencies: List of resolved dependency IDs
+        """
+        # Update in user stories
+        for story in self.user_stories:
+            if story["name"] == task_name:
+                story["dependencies"] = resolved_dependencies
+                return
+                
+        # Update in technical tasks
+        for task in self.technical_tasks:
+            if task["name"] == task_name:
+                task["dependencies"] = resolved_dependencies
+                return 

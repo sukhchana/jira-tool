@@ -18,13 +18,22 @@ class ProposedTicketMongo(BaseModel):
     required_skills: List[str] = Field(default_factory=list)
     suggested_assignee: Optional[str] = None
     dependencies: List[str] = Field(default_factory=list)
+    implementation_details: Optional[Dict[str, Any]] = Field(default_factory=dict)
     
-    # Optional fields based on ticket type
+    # User Story specific fields
     scenarios: Optional[List[dict]] = None
     business_value: Optional[str] = None
     implementation_notes: Optional[str] = None
     complexity: Optional[str] = None
     technical_domain: Optional[str] = None
+    modern_approaches: Optional[str] = None
+    accessibility_requirements: Optional[str] = None
+    integration_points: Optional[str] = None
+    user_experience: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    
+    # Technical Task specific fields
+    modern_practices: Optional[str] = None
+    security_considerations: Optional[str] = None
     
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)

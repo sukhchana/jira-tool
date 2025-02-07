@@ -57,19 +57,32 @@ class ProposedTicketsService:
             "dependencies": task["dependencies"],
             "business_value": task.get("business_value"),
             "implementation_notes": task.get("implementation_notes"),
-            "parent_id": self.epic_key
+            "parent_id": self.epic_key,
+            "implementation_details": task.get("implementation_details", {})
         }
         
-        # Add scenarios for user stories with IDs
-        if is_user_story and "scenarios" in task:
-            task_data["scenarios"] = [
-                {
-                    "id": self._generate_id("SCENARIO"),
-                    "name": scenario["name"],
-                    "steps": scenario["steps"]
-                }
-                for scenario in task["scenarios"]
-            ]
+        # Add user story specific fields
+        if is_user_story:
+            task_data.update({
+                "modern_approaches": task.get("modern_approaches"),
+                "accessibility_requirements": task.get("accessibility_requirements"),
+                "integration_points": task.get("integration_points"),
+                "user_experience": task.get("user_experience", {}),
+                "scenarios": [
+                    {
+                        "id": self._generate_id("SCENARIO"),
+                        "name": scenario["name"],
+                        "steps": scenario["steps"]
+                    }
+                    for scenario in task.get("scenarios", [])
+                ]
+            })
+        else:
+            # Add technical task specific fields
+            task_data.update({
+                "modern_practices": task.get("modern_practices"),
+                "security_considerations": task.get("security_considerations")
+            })
         
         # Add to appropriate list
         if is_user_story:
@@ -97,7 +110,8 @@ class ProposedTicketsService:
                 "story_points": subtask["story_points"],
                 "required_skills": subtask["required_skills"],
                 "dependencies": subtask["dependencies"],
-                "suggested_assignee": subtask["suggested_assignee"]
+                "suggested_assignee": subtask["suggested_assignee"],
+                "implementation_details": subtask.get("implementation_details", {})
             })
         
         return subtask_ids
@@ -126,4 +140,18 @@ class ProposedTicketsService:
             logger.info(f"Saved proposed tickets to {self.filename}")
             logger.debug(f"ID Summary: {self.get_id_summary()}")
         except Exception as e:
-            logger.error(f"Failed to save proposed tickets: {str(e)}") 
+            logger.error(f"Failed to save proposed tickets: {str(e)}")
+
+    def update_task_dependencies(self, task_id: str, resolved_dependencies: List[str]) -> None:
+        """
+        Update the dependencies of a task with resolved IDs.
+        
+        Args:
+            task_id: ID of the task to update
+            resolved_dependencies: List of resolved dependency IDs
+        """
+        # Find and update the task in high_level_tasks
+        for task in self.tickets_data["user_stories"] + self.tickets_data["technical_tasks"]:
+            if task.get("id") == task_id:
+                task["dependencies"] = resolved_dependencies
+                break 

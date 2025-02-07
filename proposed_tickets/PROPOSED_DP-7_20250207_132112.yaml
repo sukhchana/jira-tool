@@ -1,0 +1,424 @@
+execution_id: 067a608c-801b-7ca9-8000-a4dd13cbee0b
+epic_key: DP-7
+timestamp: '2025-02-07T13:21:12.007240'
+user_stories:
+- id: USER-STORY-1
+  type: User Story
+  name: '** User Story - Login with Active Directory Credentials'
+  description: '** As an end user, I want to log in to the application using my existing
+    Active Directory credentials so that I don''t have to manage multiple passwords.'
+  technical_domain: '** OAuth 2.0, Active Directory'
+  complexity: '** Medium'
+  dependencies:
+  - USER-STORY-1
+  business_value: '** High'
+  implementation_notes: null
+  parent_id: DP-7
+  scenarios:
+  - id: SCENARIO-1
+    name: '** Successful Login with Active Directory'
+    steps:
+    - keyword: Given
+      text: an end user with valid Active Directory credentials
+    - keyword: When
+      text: the user clicks the "Login with Active Directory" button
+    - keyword: Then
+      text: the user is redirected to the PingFederate login page
+    - keyword: And
+      text: upon successful authentication, the user is redirected back to the application
+    - keyword: And
+      text: the user is logged in and can access the application
+  - id: SCENARIO-2
+    name: '** Invalid Credentials'
+    steps:
+    - keyword: Given
+      text: an end user with invalid Active Directory credentials
+    - keyword: When
+      text: the user attempts to log in
+    - keyword: Then
+      text: the user receives an error message indicating invalid credentials
+  - id: SCENARIO-3
+    name: '** Screen Reader Accessibility'
+    steps:
+    - keyword: Given
+      text: a user with a screen reader
+    - keyword: When
+      text: the user navigates to the login page
+    - keyword: Then
+      text: the screen reader announces the "Login with Active Directory" button clearly
+    - keyword: And
+      text: the user can successfully log in using keyboard navigation
+- id: USER-STORY-2
+  type: User Story
+  name: '** User Story - View and Manage User Attributes'
+  description: '** As a system administrator, I want to view and manage user attributes
+    synchronized from Active Directory so that I can efficiently manage user access
+    and permissions within the application.'
+  technical_domain: ''
+  complexity: Medium
+  dependencies: []
+  business_value: Medium
+  implementation_notes: null
+  parent_id: DP-7
+  scenarios:
+  - id: SCENARIO-4
+    name: '** View User Attributes'
+    steps:
+    - keyword: Given
+      text: a system administrator is logged in
+    - keyword: When
+      text: the administrator navigates to the user management page
+    - keyword: Then
+      text: the administrator can view a list of users with their synchronized Active
+        Directory attributes
+  - id: SCENARIO-5
+    name: '** Update User Role'
+    steps:
+    - keyword: Given
+      text: a system administrator is viewing a user's profile
+    - keyword: When
+      text: the administrator modifies the user's role
+    - keyword: Then
+      text: the user's permissions within the application are updated accordingly
+  - id: SCENARIO-6
+    name: '** Search for Users by Attribute'
+    steps:
+    - keyword: Given
+      text: a system administrator is on the user management page
+    - keyword: When
+      text: the administrator searches for users using an Active Directory attribute
+        (e.g., department)
+    - keyword: Then
+      text: the system returns a list of users matching the search criteria
+- id: USER-STORY-3
+  type: User Story
+  name: '** User Story - Access Protected API Endpoints'
+  description: '** As an application developer, I want to access protected API endpoints
+    using OAuth 2.0 access tokens so that I can securely integrate with the application
+    and access user-specific data.'
+  technical_domain: ''
+  complexity: Medium
+  dependencies: []
+  business_value: Medium
+  implementation_notes: null
+  parent_id: DP-7
+  scenarios:
+  - id: SCENARIO-7
+    name: '** Successful API Access with Valid Token'
+    steps:
+    - keyword: Given
+      text: an application developer with a valid access token
+    - keyword: When
+      text: the developer sends a request to a protected API endpoint with the token
+    - keyword: Then
+      text: the API returns the requested data
+  - id: SCENARIO-8
+    name: '** Unauthorized Access with Invalid Token'
+    steps:
+    - keyword: Given
+      text: an application developer with an invalid or expired access token
+    - keyword: When
+      text: the developer sends a request to a protected API endpoint
+    - keyword: Then
+      text: the API returns a 401 Unauthorized error
+  - id: SCENARIO-9
+    name: '** Token Expiration and Refresh'
+    steps:
+    - keyword: Given
+      text: an application developer with an access token that is about to expire
+    - keyword: When
+      text: the developer sends a request to a protected API endpoint
+    - keyword: Then
+      text: the API returns a 401 Unauthorized error with a "token_expired" message
+    - keyword: And
+      text: the developer can use the refresh token to obtain a new access token
+technical_tasks: []
+subtasks:
+  '** User Story - Login with Active Directory Credentials':
+  - id: SUB-TASK-1
+    parent_id: USER-STORY-1
+    title: Configure OAuth 2.0 Provider in Active Directory
+    description: Configure Active Directory as an OAuth 2.0 provider to enable secure
+      authorization and token exchange for user authentication.
+    acceptance_criteria:
+    - Active Directory is configured as an OAuth 2.0 provider.
+    - The application is registered as a relying party trust in ADFS.
+    - Access control policies and claims rules are configured correctly.
+    story_points: 3
+    required_skills:
+    - Active Directory
+    - OAuth 2.0
+    dependencies:
+    - Active Directory with ADFS role enabled
+    suggested_assignee: System Administrator
+  - id: SUB-TASK-2
+    parent_id: USER-STORY-1
+    title: Implement OAuth 2.0 Authentication Flow in Backend
+    description: Implement the OAuth 2.0 authorization code grant flow in the backend
+      to handle user authentication requests and token exchange with Active Directory.
+    acceptance_criteria:
+    - The backend can successfully authenticate users using their Active Directory
+      credentials.
+    - The backend can obtain and validate access tokens from Active Directory.
+    - The backend can retrieve user information from Active Directory using the access
+      token.
+    story_points: 5
+    required_skills:
+    - Backend Development
+    - OAuth 2.0
+    - API Development
+    dependencies:
+    - OAuth 2.0 client library
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-3
+    parent_id: USER-STORY-1
+    title: Integrate Frontend with OAuth 2.0 Authentication
+    description: Integrate the frontend application with the backend's OAuth 2.0 authentication
+      flow to allow users to log in using their Active Directory credentials.
+    acceptance_criteria:
+    - The frontend can redirect users to the backend's OAuth 2.0 authorization endpoint.
+    - The frontend can handle the redirect back from the backend after successful
+      authentication.
+    - The frontend can store and manage the access token received from the backend.
+    story_points: 3
+    required_skills:
+    - Frontend Development
+    - OAuth 2.0
+    dependencies:
+    - Backend authentication API endpoints
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-4
+    parent_id: USER-STORY-1
+    title: Implement User Role Mapping
+    description: Map user roles and permissions from Active Directory groups to application-specific
+      roles to control user access and authorization within the application.
+    acceptance_criteria:
+    - User roles and permissions are correctly mapped from Active Directory groups
+      to application roles.
+    - Users are granted access to application resources based on their mapped roles.
+    story_points: 2
+    required_skills:
+    - Backend Development
+    - Active Directory
+    dependencies:
+    - Access to Active Directory group membership information
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-5
+    parent_id: USER-STORY-1
+    title: Implement Error Handling and Logging
+    description: Implement robust error handling and logging mechanisms for the OAuth
+      2.0 authentication flow to handle authentication failures and provide useful
+      information for debugging.
+    acceptance_criteria:
+    - The application handles authentication errors gracefully and provides informative
+      error messages to the user.
+    - Relevant information is logged for all authentication errors, including error
+      details and user context.
+    story_points: 2
+    required_skills:
+    - Backend Development
+    dependencies:
+    - Logging framework
+    suggested_assignee: Backend Developer
+  '** User Story - View and Manage User Attributes':
+  - id: SUB-TASK-6
+    parent_id: USER-STORY-2
+    title: Implement API Endpoint to Fetch User Attributes from Active Directory
+    description: Develop a REST API endpoint in the User Management Service to retrieve
+      user attributes from Active Directory using LDAP.
+    acceptance_criteria:
+    - The API endpoint should successfully connect to Active Directory using provided
+      credentials.
+    - The endpoint should retrieve specified user attributes based on the provided
+      user ID.
+    - The endpoint should handle invalid user IDs and return appropriate error responses.
+    - The endpoint should have a response time of less than 500ms.
+    story_points: 3
+    required_skills:
+    - Java
+    - Spring Boot
+    - LDAP
+    - REST API
+    dependencies:
+    - Spring LDAP library
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-7
+    parent_id: USER-STORY-2
+    title: Develop Frontend Component to Display User Attributes
+    description: Create a dedicated component in the frontend application to display
+      user attributes fetched from the backend API.
+    acceptance_criteria:
+    - The component should display user attributes retrieved from the backend API.
+    - The component should handle loading states and display appropriate messages.
+    - The component should be responsive and display correctly on different screen
+      sizes.
+    story_points: 2
+    required_skills:
+    - Frontend Development (React/Angular/Vue.js)
+    dependencies:
+    - User Management Service API
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-8
+    parent_id: USER-STORY-2
+    title: Implement API Endpoint to Update User Attributes in Active Directory
+    description: Develop a REST API endpoint in the User Management Service to update
+      specific user attributes in Active Directory.
+    acceptance_criteria:
+    - The API endpoint should successfully update specified user attributes in Active
+      Directory.
+    - The endpoint should handle invalid user IDs and attribute names and return appropriate
+      error responses.
+    - The endpoint should have a response time of less than 1 second.
+    story_points: 3
+    required_skills:
+    - Java
+    - Spring Boot
+    - LDAP
+    - REST API
+    dependencies:
+    - Spring LDAP library
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-9
+    parent_id: USER-STORY-2
+    title: Develop Functionality to Edit and Save User Attributes in Frontend
+    description: Implement the functionality for system administrators to edit and
+      save user attribute values through the frontend application.
+    acceptance_criteria:
+    - System administrators should be able to edit user attribute values through the
+      frontend interface.
+    - The application should send update requests to the backend API when saving changes.
+    - The component should handle success and error responses from the API and display
+      appropriate messages.
+    story_points: 3
+    required_skills:
+    - Frontend Development (React/Angular/Vue.js)
+    dependencies:
+    - API Endpoint to Update User Attributes
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-10
+    parent_id: USER-STORY-2
+    title: Implement Authorization for User Attribute Management
+    description: Secure the API endpoints and frontend functionality to ensure only
+      authorized system administrators can view and manage user attributes.
+    acceptance_criteria:
+    - Only authenticated users with the "ADMIN" role should be able to access the
+      API endpoints for viewing and managing user attributes.
+    - The frontend application should enforce authorization and only display user
+      attribute management functionality to authorized users.
+    - Unauthorized access attempts should be handled gracefully and return appropriate
+      error responses.
+    story_points: 2
+    required_skills:
+    - Java
+    - Spring Boot
+    - OAuth 2.0
+    - Security
+    dependencies:
+    - OAuth 2.0 Authorization Server
+    suggested_assignee: Backend Developer
+  '** User Story - Access Protected API Endpoints':
+  - id: SUB-TASK-11
+    parent_id: USER-STORY-3
+    title: Configure OAuth 2.0 Authorization Server
+    description: Set up the OAuth 2.0 authorization server to issue access tokens
+      for protected API endpoints. Integrate with Enterprise Active Directory for
+      user authentication.
+    acceptance_criteria:
+    - Authorization server is successfully configured.
+    - Users can authenticate using their Enterprise Active Directory credentials.
+    - Access tokens and refresh tokens are generated and conform to OAuth 2.0 standards.
+    - Different grant types (authorization code, refresh token) are supported.
+    story_points: 5
+    required_skills:
+    - OAuth 2.0
+    - Spring Security
+    - Java
+    - LDAP
+    dependencies:
+    - Spring Security OAuth2
+    - LDAP library
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-12
+    parent_id: USER-STORY-3
+    title: Secure API Endpoints with OAuth 2.0
+    description: Implement OAuth 2.0 resource server functionality to protect API
+      endpoints and validate access tokens.
+    acceptance_criteria:
+    - API endpoints are secured with OAuth 2.0.
+    - Only requests with valid access tokens can access protected resources.
+    - Unauthorized requests receive appropriate error responses (401 Unauthorized).
+    story_points: 3
+    required_skills:
+    - Spring Security
+    - Java
+    dependencies:
+    - Spring Security OAuth2
+    suggested_assignee: Backend Developer
+  - id: SUB-TASK-13
+    parent_id: USER-STORY-3
+    title: Implement Client-Side OAuth 2.0 Flow
+    description: Implement the client-side OAuth 2.0 flow to obtain access tokens
+      from the authorization server.
+    acceptance_criteria:
+    - Client application can successfully authenticate users with the authorization
+      server.
+    - Access tokens are obtained and stored securely.
+    - Refresh tokens are used to obtain new access tokens when expired.
+    story_points: 3
+    required_skills:
+    - OAuth 2.0
+    - JavaScript/Frontend Framework
+    - Spring OAuth2 Client (if applicable)
+    dependencies:
+    - Spring OAuth2 Client or equivalent library
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-14
+    parent_id: USER-STORY-3
+    title: Access Protected API Endpoints from Client
+    description: Implement logic to include the access token in requests to protected
+      API endpoints.
+    acceptance_criteria:
+    - Client application can successfully access protected API endpoints using the
+      obtained access token.
+    - The access token is included in the Authorization header of API requests.
+    story_points: 1
+    required_skills:
+    - JavaScript/Frontend Framework
+    dependencies:
+    - None
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-15
+    parent_id: USER-STORY-3
+    title: Handle Token Expiration and Refresh
+    description: Implement logic to handle access token expiration and refresh tokens.
+    acceptance_criteria:
+    - Client application can detect expired access tokens.
+    - Refresh tokens are used to obtain new access tokens before expiration.
+    - The application seamlessly handles token refresh without interrupting user experience.
+    story_points: 1
+    required_skills:
+    - JavaScript/Frontend Framework
+    dependencies:
+    - None
+    suggested_assignee: Frontend Developer
+  - id: SUB-TASK-16
+    parent_id: USER-STORY-3
+    title: Implement Error Handling for OAuth 2.0 Flows
+    description: Implement robust error handling for various scenarios during the
+      OAuth 2.0 flow.
+    acceptance_criteria:
+    - The application gracefully handles errors during the OAuth 2.0 flow.
+    - User-friendly error messages are displayed to the user in case of errors.
+    - The application recovers from errors gracefully and allows the user to retry
+      or take appropriate actions.
+    story_points: 1
+    required_skills:
+    - JavaScript/Frontend Framework
+    dependencies:
+    - None
+    suggested_assignee: Frontend Developer
+id_counters:
+  USER-STORY: 3
+  TECHNICAL-TASK: 0
+  SUB-TASK: 16
+  SCENARIO: 9

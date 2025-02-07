@@ -123,7 +123,10 @@ class JiraBreakdownService:
                 epic_details["summary"],
                 epic_details["description"]
             )
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm.generate_content_with_search(
+                prompt,
+                temperature=0.2
+            )
             epic_analysis = self.parser.parse_epic_analysis(response)
             
             self.execution_log.log_llm_interaction(
@@ -261,23 +264,42 @@ class JiraBreakdownService:
         try:
             # Generate user stories first
             prompt = self.prompt_helper.build_user_stories_prompt(epic_analysis)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm.generate_content_with_search(
+                prompt,
+                temperature=0.2
+            )
             user_stories = self.parser.parse_user_stories(response)
             
             # Add tasks to tracker and get IDs
+            task_name_to_id = {}  # Map to store task names to IDs
+            
+            # Process user stories
             for story in user_stories:
                 task_tracker.add_user_story(story)
-                story["id"] = proposed_tickets.add_high_level_task(story)  # Store the returned ID
+                story["id"] = proposed_tickets.add_high_level_task(story)
+                task_name_to_id[story["name"]] = story["id"]
             
             # Generate technical tasks
             prompt = self.prompt_helper.build_technical_tasks_prompt(user_stories, epic_analysis)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm.generate_content_with_search(
+                prompt,
+                temperature=0.2
+            )
             technical_tasks = self.parser.parse_technical_tasks(response)
             
-            # Add tasks to tracker and get IDs
+            # Process technical tasks
             for task in technical_tasks:
                 task_tracker.add_technical_task(task)
-                task["id"] = proposed_tickets.add_high_level_task(task)  # Store the returned ID
+                task["id"] = proposed_tickets.add_high_level_task(task)
+                task_name_to_id[task["name"]] = task["id"]
+            
+            # Resolve dependencies using the name-to-id mapping
+            self._resolve_task_dependencies(user_stories + technical_tasks, task_name_to_id)
+            
+            # Update tasks in tracker and proposed tickets with resolved dependencies
+            for task in user_stories + technical_tasks:
+                task_tracker.update_task_dependencies(task["name"], task["dependencies"])
+                proposed_tickets.update_task_dependencies(task["id"], task["dependencies"])
             
             # Verify task tracker state
             tracker_state = task_tracker.get_summary()
@@ -285,14 +307,6 @@ class JiraBreakdownService:
             logger.debug(f"- User Stories: {len(task_tracker.user_stories)}")
             logger.debug(f"- Technical Tasks: {len(task_tracker.technical_tasks)}")
             logger.debug(f"Full state: {json.dumps(tracker_state, indent=2)}")
-            
-            # Verify the structure of get_all_tasks
-            all_tasks = task_tracker.get_all_tasks()
-            logger.debug("\nTask Structure Check:")
-            logger.debug(f"Total tasks: {len(all_tasks)}")
-            for task in all_tasks:
-                logger.debug(f"Task type: {task['high_level_task']['type']}")
-                logger.debug(f"Task name: {task['high_level_task']['name']}")
             
             # Log interactions with more detail
             self.execution_log.log_llm_interaction(
@@ -320,6 +334,36 @@ class JiraBreakdownService:
             if 'technical_tasks' in locals():
                 logger.error(f"Technical tasks at time of error: {json.dumps(technical_tasks, indent=2)}")
             raise
+
+    def _resolve_task_dependencies(self, tasks: List[Dict[str, Any]], task_name_to_id: Dict[str, str]) -> None:
+        """
+        Resolve task dependencies from names to IDs.
+        
+        Args:
+            tasks: List of tasks with dependencies
+            task_name_to_id: Mapping of task names to their IDs
+        """
+        for task in tasks:
+            resolved_dependencies = []
+            for dep in task["dependencies"]:
+                # Clean up the dependency name and try to find its ID
+                dep_name = dep.strip()
+                if dep_name.lower() == "none":
+                    continue
+                    
+                # Try to find the ID for this dependency
+                if dep_name in task_name_to_id:
+                    resolved_dependencies.append(task_name_to_id[dep_name])
+                else:
+                    # If we can't find the exact name, try to find a partial match
+                    matches = [name for name in task_name_to_id.keys() if dep_name in name]
+                    if matches:
+                        resolved_dependencies.append(task_name_to_id[matches[0]])
+                    else:
+                        logger.warning(f"Could not resolve dependency '{dep_name}' for task '{task['name']}'")
+            
+            # Update the task's dependencies with resolved IDs
+            task["dependencies"] = resolved_dependencies
 
     async def _break_down_tasks(
         self,
