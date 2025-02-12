@@ -32,6 +32,7 @@ class MongoDBService:
         self.db = self.client.jira_tool
         self.proposed_tickets: Collection = self.db.proposed_tickets
         self.revisions: Collection = self.db.revisions
+        self.executions: Collection = self.db.executions
         
         # Create indexes
         self._setup_indexes()
@@ -47,6 +48,12 @@ class MongoDBService:
         self.revisions.create_index("revision_id", unique=True)
         self.revisions.create_index([("execution_id", 1), ("ticket_id", 1)])
         self.revisions.create_index("status")
+
+        # Indexes for executions collection
+        self.executions.create_index("execution_id", unique=True)
+        self.executions.create_index("epic_key")
+        self.executions.create_index("status")
+        self.executions.create_index("parent_execution_id")
     
     def persist_proposed_tickets_from_yaml(self, yaml_file_path: str) -> List[str]:
         """
@@ -240,16 +247,7 @@ class MongoDBService:
         return list(self.revisions.find({"execution_id": execution_id}))
 
     def update_ticket(self, execution_id: str, ticket_id: str, update_data: Dict[str, Any]) -> bool:
-        """Update a ticket in MongoDB
-        
-        Args:
-            execution_id: The execution ID of the ticket
-            ticket_id: The ID of the ticket to update
-            update_data: Dictionary containing the fields to update and their new values
-        
-        Returns:
-            bool: True if the update was successful, False otherwise
-        """
+        """Update a ticket in MongoDB"""
         try:
             # Add updated_at timestamp
             update_data["updated_at"] = datetime.now()
@@ -269,6 +267,64 @@ class MongoDBService:
             logger.error(f"Execution ID: {execution_id}")
             logger.error(f"Ticket ID: {ticket_id}")
             logger.error(f"Update data: {update_data}")
+            raise
+
+    def create_execution(self, execution_record: Dict[str, Any]) -> str:
+        """Create a new execution record in MongoDB
+        
+        Args:
+            execution_record: Dictionary containing execution record data
+            
+        Returns:
+            str: The execution_id of the created record
+        """
+        try:
+            # Ensure required fields
+            required_fields = ["execution_id", "epic_key", "execution_plan_file", 
+                             "proposed_plan_file", "status", "created_at"]
+            for field in required_fields:
+                if field not in execution_record:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            result = self.executions.insert_one(execution_record)
+            logger.info(f"Created execution record: {execution_record['execution_id']}")
+            return execution_record["execution_id"]
+            
+        except Exception as e:
+            logger.error(f"Failed to create execution record: {str(e)}")
+            raise
+
+    def get_execution(self, execution_id: str) -> Optional[Dict[str, Any]]:
+        """Get an execution record by ID"""
+        return self.executions.find_one({"execution_id": execution_id})
+
+    def get_executions_by_epic(self, epic_key: str) -> List[Dict[str, Any]]:
+        """Get all execution records for a given epic"""
+        return list(self.executions.find({"epic_key": epic_key}))
+
+    def update_execution_status(self, execution_id: str, status: str) -> bool:
+        """Update the status of an execution record
+        
+        Args:
+            execution_id: The ID of the execution to update
+            status: The new status value
+            
+        Returns:
+            bool: True if update was successful
+        """
+        try:
+            result = self.executions.update_one(
+                {"execution_id": execution_id},
+                {
+                    "$set": {
+                        "status": status,
+                        "updated_at": datetime.now()
+                    }
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Failed to update execution status: {str(e)}")
             raise
 
 if __name__ == "__main__":

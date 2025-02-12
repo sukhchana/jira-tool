@@ -4,10 +4,11 @@ from typing import Dict, Any
 from loguru import logger
 import json
 from uuid_extensions import uuid7  # Correct import for uuid7
+from services.mongodb_service import MongoDBService
 
 
 class ExecutionLogService:
-    """Service for logging execution details to markdown files"""
+    """Service for logging execution details to markdown files and MongoDB"""
     
     def __init__(self, epic_key: str):
         """Initialize with epic key to create unique log file"""
@@ -15,6 +16,7 @@ class ExecutionLogService:
         self.execution_id = str(uuid7())  # Generate UUID-7
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.filename = f"execution_plans/EXECUTION_{epic_key}_{self.timestamp}.md"
+        self.mongodb = MongoDBService()
         
         # Ensure execution_plans directory exists
         os.makedirs("execution_plans", exist_ok=True)
@@ -34,7 +36,7 @@ class ExecutionLogService:
         status: str
     ) -> None:
         """
-        Create a record of the execution attempt.
+        Create a record of the execution attempt in both file and MongoDB.
         
         Args:
             execution_id: Unique identifier for this execution
@@ -44,19 +46,24 @@ class ExecutionLogService:
             status: Status of the execution (SUCCESS/FAILED/FATAL_ERROR)
         """
         try:
-            # Log the execution record to the file
+            # Create the record
+            record = {
+                "execution_id": execution_id,
+                "epic_key": epic_key,
+                "execution_plan_file": execution_plan_file,
+                "proposed_plan_file": proposed_plan_file,
+                "status": status,
+                "created_at": datetime.now()
+            }
+            
+            # Store in MongoDB
+            self.mongodb.create_execution(record)
+            
+            # Log to file
             with open(self.filename, "a") as f:
                 f.write("\n## Execution Record\n\n")
                 f.write("```json\n")
-                record = {
-                    "execution_id": execution_id,
-                    "epic_key": epic_key,
-                    "execution_plan_file": execution_plan_file,
-                    "proposed_plan_file": proposed_plan_file,
-                    "status": status,
-                    "timestamp": datetime.now().isoformat()
-                }
-                f.write(json.dumps(record, indent=2))
+                f.write(json.dumps(record, indent=2, default=str))
                 f.write("\n```\n")
                 
             logger.info(f"Created execution record for {execution_id} with status {status}")

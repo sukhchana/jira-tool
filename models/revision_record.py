@@ -7,6 +7,7 @@ class RevisionRecord(BaseModel):
     revision_id: str = Field(..., description="UUID of the revision")
     execution_id: str = Field(..., description="UUID of the execution being revised")
     ticket_id: str = Field(..., description="ID of the ticket being revised")
+    epic_key: str = Field(..., description="The JIRA epic key this revision belongs to")
     proposed_plan_file: str = Field(..., description="Path to the proposed plan file")
     execution_plan_file: str = Field(..., description="Path to the execution plan file")
     status: str = Field(..., description="Status of the revision (PENDING/ACCEPTED/REJECTED)")
