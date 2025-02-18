@@ -43,18 +43,18 @@ class ProposedTicketsService:
     def add_high_level_task(self, task: Dict[str, Any]) -> str:
         """Add a high-level task (user story or technical task)"""
         # Determine task type and generate ID
-        is_user_story = task["type"] == "User Story"
+        is_user_story = task.get("type") == "User Story"
         type_prefix = "USER-STORY" if is_user_story else "TECHNICAL-TASK"
         task_id = self._generate_id(type_prefix)
         
         task_data = {
             "id": task_id,
-            "type": task["type"],
-            "name": task["name"],
-            "description": task["description"],
-            "technical_domain": task["technical_domain"],
-            "complexity": task["complexity"],
-            "dependencies": task["dependencies"],
+            "type": task.get("type", "Technical Task"),
+            "title": task.get("title", task.get("name", "")),  # Handle both title and name for backward compatibility
+            "description": task.get("description", ""),
+            "technical_domain": task.get("technical_domain", ""),
+            "complexity": task.get("complexity", "Medium"),
+            "dependencies": task.get("dependencies", []),
             "business_value": task.get("business_value"),
             "implementation_notes": task.get("implementation_notes"),
             "parent_id": self.epic_key,
@@ -71,8 +71,8 @@ class ProposedTicketsService:
                 "scenarios": [
                     {
                         "id": self._generate_id("SCENARIO"),
-                        "name": scenario["name"],
-                        "steps": scenario["steps"]
+                        "name": scenario.get("name", ""),
+                        "steps": scenario.get("steps", [])
                     }
                     for scenario in task.get("scenarios", [])
                 ]

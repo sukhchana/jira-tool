@@ -90,11 +90,11 @@ class JiraOrchestrationService:
         task: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Create a story-level ticket linked to an epic"""
-        logger.debug(f"Creating story from task: {task['name']}")
+        logger.debug(f"Creating story from task: {task['title']}")
         
         story = await self.jira_service.create_ticket(
             project_key=project_key,
-            summary=task["name"],
+            summary=task["title"],
             description=self._format_story_description(task),
             issue_type="Story",
             labels=[task["technical_domain"], f"complexity-{task['complexity'].lower()}"],
@@ -237,7 +237,7 @@ class JiraOrchestrationService:
             lines.extend([
                 "---",
                 "",
-                f"#### Story: {story['name']}",
+                f"#### Story: {story['title']}",
                 "```",
                 f"Type: Story",
                 f"Technical Domain: {story['technical_domain']}",

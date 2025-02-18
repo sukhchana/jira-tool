@@ -15,14 +15,20 @@ The application follows a modular, service-oriented architecture:
 2. **Services** (`services/`)
    - `jira_service.py`: Handles JIRA API interactions
    - `jira_breakdown_service.py`: Orchestrates epic breakdown and ticket creation
-   - `prompt_helper_service.py`: Manages LLM prompt templates
    - `ticket_parser_service.py`: Parses LLM responses into structured data
 
-3. **Routers** (`routers/`)
+3. **Prompts** (`prompts/`)
+   - `base_prompt_builder.py`: Base class for all prompt builders
+   - `epic_prompt_builder.py`: Epic analysis and breakdown prompts
+   - `user_story_prompt_builder.py`: User story generation prompts
+   - `technical_task_prompt_builder.py`: Technical task generation prompts
+   - `subtask_prompt_builder.py`: Subtask generation prompts
+
+4. **Routers** (`routers/`)
    - `jira_router.py`: JIRA-related endpoints
    - `llm_router.py`: LLM-related endpoints
 
-4. **Utils** (`utils/`)
+5. **Utils** (`utils/`)
    - `logger.py`: Centralized logging configuration
 
 ### Architecture Flow
@@ -45,7 +51,7 @@ The application follows a modular, service-oriented architecture:
 ┌──────────────┘ │ └──────────────┐
 ▼ ▼ ▼
 ┌────────────────────┐ ┌────────────────────┐ ┌─────────────────────┐
-│ VertexLLM │ │ PromptHelper │ │ TicketParser │
+│ VertexLLM │ │ PromptBuilders │ │ TicketParser │
 │ │ │ │ │ │
 └─────────┬──────────┘ └────────┬──────────┘ └──────────┬──────────┘
 │ │ │
@@ -287,8 +293,14 @@ The application uses Loguru for logging:
 │   ├── __init__.py
 │   ├── jira_service.py
 │   ├── jira_breakdown_service.py
-│   ├── prompt_helper_service.py
 │   └── ticket_parser_service.py
+├── prompts/
+│   ├── __init__.py
+│   ├── base_prompt_builder.py
+│   ├── epic_prompt_builder.py
+│   ├── user_story_prompt_builder.py
+│   ├── technical_task_prompt_builder.py
+│   └── subtask_prompt_builder.py
 ├── routers/
 │   ├── __init__.py
 │   ├── jira_router.py

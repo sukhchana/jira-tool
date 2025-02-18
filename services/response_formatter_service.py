@@ -48,13 +48,13 @@ class ResponseFormatterService:
                             {
                                 "id": task["high_level_task"].get("id") or f"TASK-{i+1}",
                                 "type": task["high_level_task"]["type"],
-                                "name": task["high_level_task"]["name"],
+                                "title": task["high_level_task"]["title"],
                                 "complexity": task["high_level_task"]["complexity"]
                             }
                             for i, task in enumerate(result["tasks"])
                         ],
                         "subtasks_by_parent": {
-                            task["high_level_task"]["name"]: len(task.get("subtasks", []))
+                            task["high_level_task"]["title"]: len(task.get("subtasks", []))
                             for task in result["tasks"]
                         }
                     }

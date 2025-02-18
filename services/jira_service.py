@@ -1,18 +1,25 @@
 from utils import bootstrap  # This must be the first import
 import aiohttp  # Replace requests with aiohttp
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import HTTPException
 import logging
 import base64
 import ssl
 from models import TicketCreateResponse, JiraProject
+from loguru import logger
+from jira_integration import EpicOperations, TicketOperations  # Updated import path
 
 logger = logging.getLogger(__name__)
 
 class JiraService:
+    """Service for interacting with JIRA"""
+    
     def __init__(self):
-        """Initialize JIRA service with proper authentication"""
+        """Initialize JIRA operations"""
+        self.epic_ops = EpicOperations()
+        self.ticket_ops = TicketOperations()
+        
         self.base_url = f"{os.getenv('JIRA_SERVER')}/rest/api/2"
         
         self.set_headers_basic()
@@ -47,139 +54,113 @@ class JiraService:
             "Accept": "application/json"
         }
     
-    async def get_ticket(self, ticket_key: str) -> Dict[str, Any]:
-        """Get details of a specific JIRA ticket"""
+    async def get_ticket(self, ticket_key: str) -> Optional[Dict[str, Any]]:
+        """Get a ticket by key"""
+        if ticket_key.split("-")[1].startswith("E"):
+            return await self.epic_ops.get_epic_details(ticket_key)
+        else:
+            return await self.ticket_ops.get_ticket_details(ticket_key)
+    
+    async def create_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new ticket based on type"""
         try:
-            url = f"{self.base_url}/issue/{ticket_key}"
-            logger.debug(f"Attempting to fetch ticket from: {url}")
+            issue_type = ticket_data.get("issue_type", "").lower()
+            project_key = ticket_data.get("project_key")
+            summary = ticket_data.get("summary")
+            description = ticket_data.get("description")
+            parent_key = ticket_data.get("parent_key")
             
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url, 
-                    headers=self.headers,
-                    ssl=self.ssl_context  # Disable SSL verification
-                ) as response:
-                    if response.status == 200:
-                        issue_data = await response.json()
-                        fields = issue_data.get("fields", {})
-                        
-                        return {
-                            "key": issue_data.get("key"),
-                            "summary": fields.get("summary"),
-                            "description": fields.get("description"),
-                            "status": fields.get("status", {}).get("name"),
-                            "created": fields.get("created"),
-                            "updated": fields.get("updated")
-                        }
-                    elif response.status == 404:
-                        error_msg = (
-                            f"Ticket {ticket_key} not found\n"
-                            f"API URL: {url}\n"
-                            f"JIRA Server: {os.getenv('JIRA_SERVER')}\n"
-                            f"Response: {await response.text()}"
-                        )
-                        raise HTTPException(status_code=404, detail=error_msg)
-                    else:
-                        error_msg = (
-                            f"JIRA API Error:\n"
-                            f"URL: {url}\n"
-                            f"Status Code: {response.status}\n"
-                            f"Response: {await response.text()}"
-                        )
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=error_msg
-                        )
-                        
-        except aiohttp.ClientError as e:
-            error_msg = (
-                f"Failed to fetch ticket {ticket_key}:\n"
-                f"URL: {url}\n"
-                f"Error: {str(e)}"
-            )
-            raise HTTPException(status_code=500, detail=error_msg)
-
-    async def create_ticket(
-        self,
-        project_key: str,
-        summary: str,
-        description: str,
-        issue_type: str,
-        *,
-        parent_key: str = None,
-        story_points: int = None,
-        labels: List[str] = None,
-        acceptance_criteria: str = None,
-        technical_domain: str = None,
-        epic_link: str = None,
-        priority: str = "Medium"
-    ) -> TicketCreateResponse:
-        """Create a new JIRA ticket with relationships and custom fields"""
-        try:
-            url = f"{self.base_url}/issue"
+            if not all([project_key, summary, description]):
+                raise ValueError("Missing required ticket fields")
             
-            # Build the base fields
-            fields = {
-                "project": {"key": project_key},
-                "summary": summary,
-                "description": description,
-                "issuetype": {"name": issue_type},
-                "priority": {"name": priority}
+            # Prepare additional fields
+            additional_fields = {
+                k: v for k, v in ticket_data.items()
+                if k not in ["project_key", "summary", "description", "issue_type", "parent_key"]
             }
             
-            # Add parent link for subtasks
-            if parent_key and issue_type == "Sub-task":
-                fields["parent"] = {"key": parent_key}
-            
-            # Add epic link for stories and technical tasks
-            if epic_link and issue_type in ["Story", "Task"]:
-                fields["customfield_10014"] = epic_link  # Epic Link field
-            
-            # Add story points if provided
-            if story_points is not None:
-                fields["customfield_10016"] = float(story_points)  # Story Points field
-            
-            # Add labels
-            if labels:
-                fields["labels"] = labels
-                if technical_domain and technical_domain not in labels:
-                    fields["labels"].append(technical_domain)
-            elif technical_domain:
-                fields["labels"] = [technical_domain]
-            
-            # Add acceptance criteria if provided
-            if acceptance_criteria:
-                fields["customfield_10015"] = acceptance_criteria  # Acceptance Criteria field
-            
-            payload = {"fields": fields}
-            
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url, 
-                    headers=self.headers,
-                    json=payload,
-                    ssl=self.ssl_context
-                ) as response:
-                    if response.status == 201:
-                        issue_data = await response.json()
-                        issue_key = issue_data.get("key")
-                        return TicketCreateResponse(
-                            status="success",
-                            message="Ticket created successfully",
-                            ticket_key=issue_key,
-                            ticket_url=f"{os.getenv('JIRA_SERVER')}/browse/{issue_key}"
-                        )
-                    else:
-                        error_msg = (
-                            f"Failed to create JIRA ticket:\n"
-                            f"Status: {response.status}\n"
-                            f"Response: {await response.text()}"
-                        )
-                        raise HTTPException(status_code=response.status, detail=error_msg)
-                    
+            if issue_type == "epic":
+                return await self.epic_ops.create_epic(
+                    project_key=project_key,
+                    summary=summary,
+                    description=description,
+                    additional_fields=additional_fields
+                )
+            elif issue_type == "story":
+                return await self.ticket_ops.create_story(
+                    project_key=project_key,
+                    summary=summary,
+                    description=description,
+                    epic_key=parent_key,
+                    additional_fields=additional_fields
+                )
+            elif issue_type == "task":
+                return await self.ticket_ops.create_task(
+                    project_key=project_key,
+                    summary=summary,
+                    description=description,
+                    epic_key=parent_key,
+                    additional_fields=additional_fields
+                )
+            elif issue_type == "sub-task":
+                if not parent_key:
+                    raise ValueError("Parent key is required for subtasks")
+                return await self.ticket_ops.create_subtask(
+                    project_key=project_key,
+                    summary=summary,
+                    description=description,
+                    parent_key=parent_key,
+                    additional_fields=additional_fields
+                )
+            else:
+                raise ValueError(f"Unsupported issue type: {issue_type}")
+                
         except Exception as e:
             logger.error(f"Failed to create ticket: {str(e)}")
+            logger.error(f"Ticket data: {ticket_data}")
             raise
+    
+    async def update_ticket(
+        self,
+        ticket_key: str,
+        fields: Dict[str, Any]
+    ) -> bool:
+        """Update a ticket's fields"""
+        try:
+            if ticket_key.split("-")[1].startswith("E"):
+                return await self.epic_ops.update_epic_status(ticket_key, fields.get("status"))
+            else:
+                return await self.ticket_ops.update_ticket(ticket_key, fields)
+        except Exception as e:
+            logger.error(f"Failed to update ticket: {str(e)}")
+            return False
+    
+    async def update_ticket_status(
+        self,
+        ticket_key: str,
+        status: str
+    ) -> bool:
+        """Update a ticket's status"""
+        try:
+            if ticket_key.split("-")[1].startswith("E"):
+                return await self.epic_ops.update_epic_status(ticket_key, status)
+            else:
+                return await self.ticket_ops.update_ticket_status(ticket_key, status)
+        except Exception as e:
+            logger.error(f"Failed to update ticket status: {str(e)}")
+            return False
+    
+    async def get_epic_progress(self, epic_key: str) -> Dict[str, Any]:
+        """Get progress statistics for an epic"""
+        return await self.epic_ops.get_epic_progress(epic_key)
+    
+    async def get_linked_tickets(
+        self,
+        ticket_key: str,
+        link_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get tickets linked to the specified ticket"""
+        return await self.ticket_ops.get_linked_tickets(ticket_key, link_type)
 
     async def get_projects(self) -> List[JiraProject]:
         """Get list of available JIRA projects"""

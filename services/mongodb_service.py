@@ -9,27 +9,21 @@ if __name__ == "__main__":
     sys.path.insert(0, project_root)
 
 from typing import List, Optional, Dict, Any
-from pymongo import MongoClient
 from pymongo.collection import Collection
 from models.proposed_ticket_mongo import ProposedTicketMongo
 import yaml
 from loguru import logger
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from database import MongoConnection
 
 class MongoDBService:
     """Service for handling MongoDB operations"""
     
     def __init__(self):
-        """Initialize MongoDB connection"""
-        connection_string = os.getenv("MONGO_CONNECTION_STRING")
-        if not connection_string:
-            raise ValueError("MONGO_CONNECTION_STRING environment variable is not set")
-            
-        self.client = MongoClient(connection_string)
-        self.db = self.client.jira_tool
+        """Initialize MongoDB collections using centralized connection"""
+        # Get database instance from connection manager
+        self.db = MongoConnection().db
+        
+        # Initialize collections
         self.proposed_tickets: Collection = self.db.proposed_tickets
         self.revisions: Collection = self.db.revisions
         self.executions: Collection = self.db.executions
@@ -326,6 +320,52 @@ class MongoDBService:
         except Exception as e:
             logger.error(f"Failed to update execution status: {str(e)}")
             raise
+
+    def save_user_stories(self, stories: List[Dict[str, Any]], yaml_data: Dict[str, Any]) -> None:
+        """Save user stories to MongoDB"""
+        for story in stories:
+            story_doc = {
+                "epic_key": self.epic_key,
+                "execution_id": self.execution_id,
+                "type": "User Story",
+                "title": story['title'],
+                "description": story.get('description', ''),
+                "technical_domain": story.get('technical_domain', ''),
+                "complexity": story.get('complexity', 'Medium'),
+                "dependencies": story.get('dependencies', []),
+                "implementation_details": story.get('implementation_details', {}),
+                "created_at": datetime.now()
+            }
+            
+            # Get subtasks for this story
+            subtasks = yaml_data.get('subtasks', {}).get(story['title'], [])
+            if subtasks:
+                story_doc["subtasks"] = subtasks
+            
+            self.stories_collection.insert_one(story_doc)
+            
+    def save_technical_tasks(self, tasks: List[Dict[str, Any]], yaml_data: Dict[str, Any]) -> None:
+        """Save technical tasks to MongoDB"""
+        for task in tasks:
+            task_doc = {
+                "epic_key": self.epic_key,
+                "execution_id": self.execution_id,
+                "type": "Technical Task",
+                "title": task['title'],
+                "description": task.get('description', ''),
+                "technical_domain": task.get('technical_domain', ''),
+                "complexity": task.get('complexity', 'Medium'),
+                "dependencies": task.get('dependencies', []),
+                "implementation_details": task.get('implementation_details', {}),
+                "created_at": datetime.now()
+            }
+            
+            # Get subtasks for this task
+            subtasks = yaml_data.get('subtasks', {}).get(task['title'], [])
+            if subtasks:
+                task_doc["subtasks"] = subtasks
+            
+            self.tasks_collection.insert_one(task_doc)
 
 if __name__ == "__main__":
     try:
