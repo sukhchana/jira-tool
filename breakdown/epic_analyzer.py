@@ -6,6 +6,7 @@ from services.execution_log_service import ExecutionLogService
 from llm.vertexllm import VertexLLM
 from parsers import TicketDescriptionParser, EpicAnalysisParser
 from services.format_fixer_service import FormatFixerService
+from models.analysis_info import AnalysisInfo
 import json
 
 class EpicAnalyzer:
@@ -16,7 +17,7 @@ class EpicAnalyzer:
         self.format_fixer = FormatFixerService(llm_service=self.llm)
         self.execution_log = execution_log
 
-    async def analyze_epic(self, summary: str, description: str) -> Dict[str, Any]:
+    async def analyze_epic(self, summary: str, description: str) -> AnalysisInfo:
         """
         Analyze an epic's scope and requirements.
         
@@ -25,7 +26,7 @@ class EpicAnalyzer:
             description: Epic description
             
         Returns:
-            Structured analysis of the epic
+            AnalysisInfo containing structured analysis of the epic
         """
         try:
             # Generate epic analysis prompt and get LLM response
@@ -39,14 +40,22 @@ class EpicAnalyzer:
             logger.debug("-" * 80)
             
             # Parse the response
-            epic_analysis = await EpicAnalysisParser.parse_with_format_fixing(response, self.format_fixer)
+            analysis_dict = await EpicAnalysisParser.parse_with_format_fixing(response, self.format_fixer)
+            
+            # Convert to AnalysisInfo model
+            epic_analysis = AnalysisInfo(
+                main_objective=analysis_dict["main_objective"],
+                technical_domains=analysis_dict.get("technical_domains", []),
+                core_requirements=analysis_dict.get("core_requirements", []),
+                stakeholders=analysis_dict.get("stakeholders", [])
+            )
             
             # Log the analysis
             self.execution_log.log_llm_interaction(
                 "Epic Analysis",
                 prompt,
                 response,
-                epic_analysis
+                epic_analysis.dict()
             )
             
             return epic_analysis
@@ -55,14 +64,13 @@ class EpicAnalyzer:
             logger.error(f"Failed to analyze epic: {str(e)}")
             logger.error(f"Summary: {summary}")
             logger.error(f"Description: {description}")
-            return {
-                "main_objective": "Error analyzing epic",
-                "stakeholders": [],
-                "core_requirements": [],
-                "technical_domains": [],
-                "dependencies": [],
-                "challenges": []
-            }
+            # Return a default AnalysisInfo in case of error
+            return AnalysisInfo(
+                main_objective="Error analyzing epic",
+                technical_domains=[],
+                core_requirements=[],
+                stakeholders=[]
+            )
 
     def parse_ticket_description(self, response: str) -> Dict[str, Any]:
         """Parse ticket description from LLM response"""

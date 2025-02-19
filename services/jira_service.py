@@ -7,6 +7,7 @@ import logging
 import base64
 import ssl
 from models import TicketCreateResponse, JiraProject
+from models.jira_ticket_details import JiraTicketDetails
 from loguru import logger
 from jira_integration import EpicOperations, TicketOperations  # Updated import path
 
@@ -54,12 +55,66 @@ class JiraService:
             "Accept": "application/json"
         }
     
-    async def get_ticket(self, ticket_key: str) -> Optional[Dict[str, Any]]:
+    async def get_ticket(self, ticket_key: str) -> Optional[JiraTicketDetails]:
         """Get a ticket by key"""
-        if ticket_key.split("-")[1].startswith("E"):
-            return await self.epic_ops.get_epic_details(ticket_key)
-        else:
-            return await self.ticket_ops.get_ticket_details(ticket_key)
+        try:
+            logger.info(f"Attempting to fetch ticket: {ticket_key}")
+            
+            # Check if it's an epic based on key format
+            is_epic = ticket_key.split("-")[1].startswith("E")
+            logger.debug(f"Ticket {ticket_key} is_epic: {is_epic}")
+            
+            if is_epic:
+                logger.info(f"Fetching epic details for {ticket_key}")
+                ticket_data = await self.epic_ops.get_epic_details(ticket_key)
+                if ticket_data is None:
+                    logger.error(f"Epic {ticket_key} details returned None")
+                    return None
+            else:
+                logger.info(f"Fetching regular ticket details for {ticket_key}")
+                ticket_data = await self.ticket_ops.get_ticket_details(ticket_key)
+                
+            if not ticket_data:
+                logger.warning(f"No data found for ticket {ticket_key}")
+                return None
+                
+            logger.debug(f"Raw ticket data received: {ticket_data}")
+                
+            # Convert raw JIRA data to JiraTicketDetails model
+            try:
+                ticket_details = JiraTicketDetails(
+                    key=ticket_data["key"],
+                    summary=ticket_data["summary"],
+                    description=ticket_data.get("description", ""),
+                    issue_type=ticket_data.get("issuetype", {}).get("name", "Unknown"),
+                    status=ticket_data.get("status", {}).get("name", "Unknown"),
+                    project_key=ticket_data.get("project", {}).get("key", ""),
+                    created=ticket_data["created"],
+                    updated=ticket_data["updated"],
+                    assignee=ticket_data.get("assignee", {}).get("name"),
+                    reporter=ticket_data.get("reporter", {}).get("name"),
+                    priority=ticket_data.get("priority", {}).get("name"),
+                    labels=ticket_data.get("labels", []),
+                    components=[c["name"] for c in ticket_data.get("components", [])],
+                    parent_key=ticket_data.get("parent", {}).get("key"),
+                    epic_key=ticket_data.get("customfield_10014"),  # Assuming this is the epic link field
+                    story_points=ticket_data.get("customfield_10016"),  # Assuming this is the story points field
+                    custom_fields={
+                        k: v for k, v in ticket_data.items()
+                        if k.startswith("customfield_") and v is not None
+                    }
+                )
+                logger.info(f"Successfully converted ticket {ticket_key} to JiraTicketDetails")
+                return ticket_details
+            except Exception as e:
+                logger.error(f"Failed to convert ticket data to JiraTicketDetails: {str(e)}")
+                logger.error(f"Problematic ticket data: {ticket_data}")
+                raise
+                
+        except Exception as e:
+            logger.error(f"Error getting ticket {ticket_key}: {str(e)}")
+            logger.exception("Full traceback:")
+            return None
     
     async def create_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ticket based on type"""

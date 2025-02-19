@@ -1,0 +1,454 @@
+[
+  {
+    "id": "USER-STORY-1",
+    "title": "User Story - Securely Access Application Resources",
+    "type": "User Story",
+    "description": {
+      "role": "Application User",
+      "goal": "Authenticate with my existing Active Directory credentials",
+      "benefit": "I can securely access the application without creating a separate account",
+      "formatted": "As an Application User, I want to authenticate with my existing Active Directory credentials, so that I can securely access the application without creating a separate account"
+    },
+    "technical_domain": "Authentication and Authorization",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [],
+    "suggested_assignee": "Unassigned",
+    "dependencies": [
+      "PING Federate configuration as OAuth 2 server"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "- Multiple Accounts: Users are frustrated with managing separate accounts for different applications, leading to password fatigue and security risks. - Inconsistent Experience: Having different authentication mechanisms across applications creates confusion and hinders productivity. - Security Concerns: Storing and managing user credentials within the application increases the risk of data breaches and unauthorized access. - Increased Development Effort: Building and maintaining a separate authentication system is time-consuming and resource-intensive.",
+      "success_metrics": "- Adoption Rate: Track the percentage of users successfully authenticating with their Active Directory credentials. - Reduction in Support Tickets: Monitor the number of support requests related to account creation, password resets, and access issues. - Time to First Login: Measure the time it takes for a new user to successfully log in using their Active Directory credentials. - Authentication Error Rate: Track the frequency of failed login attempts due to authentication errors.",
+      "similar_implementations": "- Azure Active Directory (Azure AD): Offers comprehensive identity and access management services, including support for OAuth 2 and OpenID Connect. - Auth0: Provides a cloud-based identity platform with seamless Active Directory integration and support for various authentication protocols. - Okta: Another popular identity provider that simplifies user authentication and authorization with pre-built integrations for Active Directory and other systems.",
+      "modern_approaches": "- Passwordless Authentication: Explore modern authentication methods like biometrics, security keys, and magic links to enhance security and user experience. - Zero Trust Security: Implement a Zero Trust security model that verifies every access request, regardless of the user's location or device. - Multi-Factor Authentication (MFA): Enforce MFA to add an extra layer of security and protect against unauthorized access. - Centralized Identity Management: Leverage a centralized identity provider like PING Federate to manage user identities, roles, and access permissions across multiple applications."
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "OAuth 2 and OpenID Connect authentication flow using the `requests_oauthlib` library",
+        "code": "from requests_oauthlib import OAuth2Session\nfrom oauthlib.oauth2 import WebApplicationClient\n\n# Configuration\nCLIENT_ID = \"your_client_id\"\nCLIENT_SECRET = \"your_client_secret\"\nAUTHORIZATION_URL = \"https://your-ping-federate-server/as/authorization.oauth2\"\nTOKEN_URL = \"https://your-ping-federate-server/as/token.oauth2\"\nREDIRECT_URI = \"your_redirect_uri\"\n\n# Create an OAuth2Session\noauth = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI)\n\n# Redirect user to authorization URL\nauthorization_url, state = oauth.authorization_url(AUTHORIZATION_URL)\nprint(f\"Please go to this URL and authenticate: {authorization_url}\")\n\n# Get authorization code from callback\nauthorization_response = input(\"Enter the full callback URL: \")\n\n# Fetch access token\ntoken = oauth.fetch_token(\n    TOKEN_URL,\n    authorization_response=authorization_response,\n    client_secret=CLIENT_SECRET,\n)\n\n# Access protected resources\nresponse = oauth.get(\"https://your-protected-resource-endpoint\")\nprint(response.content)"
+      },
+      {
+        "language": "python",
+        "description": "Retrieving user roles and attributes from Active Directory using the `ldap3` library",
+        "code": "import ldap3\n\n# Configuration\nAD_SERVER = \"your-active-directory-server\"\nAD_USERNAME = \"your_ad_username\"\nAD_PASSWORD = \"your_ad_password\"\n\n# Connect to Active Directory\nserver = ldap3.Server(AD_SERVER, get_info=ldap3.ALL)\nconn = ldap3.Connection(server, user=AD_USERNAME, password=AD_PASSWORD)\nconn.bind()\n\n# Search for user\nsearch_filter = f\"(sAMAccountName={username})\"  # Replace 'username' with the authenticated user's username\nconn.search(search_base=\"your_ad_search_base\", search_filter=search_filter, attributes=['memberOf', 'displayName'])\n\n# Get user roles and attributes\nuser_data = conn.entries[0]\nroles = [role.split(',')[0].split('=')[1] for role in user_data.memberOf]\ndisplay_name = user_data.displayName\n\n# Close connection\nconn.unbind()"
+      },
+      {
+        "language": "python",
+        "description": "Error handling during authentication and authorization",
+        "code": "try:\n    # Authentication and authorization logic\n    ...\nexcept oauthlib.oauth2.rfc6749.errors.OAuth2Error as e:\n    # Handle OAuth 2 errors\n    print(f\"OAuth 2 error: {e}\")\n    # Redirect to error page or display error message\nexcept ldap3.core.exceptions.LDAPException as e:\n    # Handle Active Directory errors\n    print(f\"Active Directory error: {e}\")\n    # Redirect to error page or display error message\nexcept Exception as e:\n    # Handle other exceptions\n    print(f\"An error occurred: {e}\")\n    # Redirect to error page or display error message"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Authentication with Active Directory Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an Application User wants to access the application"
+          },
+          {
+            "keyword": "When",
+            "text": "the user is redirected to the Active Directory login page"
+          },
+          {
+            "keyword": "And",
+            "text": "the user enters valid Active Directory credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "the user is successfully authenticated"
+          },
+          {
+            "keyword": "And",
+            "text": "redirected to the application's home page"
+          }
+        ]
+      },
+      {
+        "name": "Handling Invalid Active Directory Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an Application User wants to access the application"
+          },
+          {
+            "keyword": "When",
+            "text": "the user is redirected to the Active Directory login page"
+          },
+          {
+            "keyword": "And",
+            "text": "the user enters invalid Active Directory credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "the user is shown an error message indicating invalid credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is prompted to re-enter their credentials"
+          }
+        ]
+      },
+      {
+        "name": "Verifying User Roles and Attributes Retrieval",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an Application User is successfully authenticated"
+          },
+          {
+            "keyword": "When",
+            "text": "the application retrieves user information"
+          },
+          {
+            "keyword": "Then",
+            "text": "the user's roles and attributes from Active Directory are retrieved"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is granted access to resources based on their roles"
+          }
+        ]
+      },
+      {
+        "name": "Authentication Performance Test",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an Application User initiates the authentication process"
+          },
+          {
+            "keyword": "When",
+            "text": "the user submits their credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "the authentication process should complete within 2 seconds"
+          }
+        ]
+      },
+      {
+        "name": "Secure Communication with PING Federate",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an Application User initiates the authentication process"
+          },
+          {
+            "keyword": "When",
+            "text": "the application communicates with PING Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "the communication should be over HTTPS"
+          },
+          {
+            "keyword": "And",
+            "text": "use a valid SSL certificate"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-2",
+    "title": "User Story - Enable Machine-to-Machine Communication",
+    "type": "User Story",
+    "description": {
+      "role": "System Administrator",
+      "goal": "Configure authorized applications for machine-to-machine access",
+      "benefit": "I can enable secure communication between systems without user intervention",
+      "formatted": "As a System Administrator, I want to configure authorized applications for machine-to-machine access, so that I can enable secure communication between systems without user intervention"
+    },
+    "technical_domain": "API Security",
+    "complexity": "Medium",
+    "business_value": "Medium",
+    "story_points": 3,
+    "required_skills": [],
+    "suggested_assignee": "Unassigned",
+    "dependencies": [
+      "OAuth 2 implementation for Client Credentials Grant"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "- Manual Intervention for System Communication: Currently, communication between systems might require manual steps, user interaction, or complex workarounds, leading to inefficiencies and potential security risks. - Lack of Centralized Authorization: Managing authorization for machine-to-machine communication might be ad-hoc, relying on individual system configurations, making it difficult to maintain and audit. - Security Concerns: Without a robust system for application-level authentication and authorization, communication between systems could be vulnerable to unauthorized access or data breaches.",
+      "success_metrics": "- Reduction in Manual Intervention: Track the number of manual interventions required for system communication before and after implementation. - Time Savings: Measure the time saved in setting up and managing system communication after implementing this feature. - Number of Applications Onboarded: Monitor the adoption rate of machine-to-machine communication by tracking the number of applications registered and actively using the system. - Security Audit Results: Conduct regular security audits to ensure that the implemented solution effectively mitigates security risks and complies with relevant standards.",
+      "similar_implementations": "- OAuth 2.0 Client Credentials Grant: Widely used for machine-to-machine authentication. (https://oauth.net/2/grant-types/client-credentials/) - Amazon Web Services (AWS) IAM Roles for Applications: Allows applications running on EC2 instances to make API requests to other AWS services without requiring long-term credentials. (https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html) - Google Cloud Platform (GCP) Service Accounts: Provides an identity that you can use to authenticate and authorize applications running on GCP. (https://cloud.google.com/iam/docs/creating-managing-service-accounts) - Azure Active Directory (Azure AD) Application Permissions: Enables you to define what data and permissions your application needs to access other applications and services in Azure AD. (https://learn.microsoft.com/en-us/azure/active-directory/developers/v2-permissions-and-consent)",
+      "modern_approaches": "- Zero Trust Security: Implement the principles of Zero Trust by assuming that no user or application should be trusted by default, even if they are already inside the network. - Microservices Architecture: Design the system with a microservices architecture, where each service has its own security context and authorization policies, enhancing security and scalability. - Token-Based Authentication: Utilize token-based authentication mechanisms like JWT (JSON Web Token) for secure and efficient communication between systems. - Automated Security Testing: Integrate automated security testing tools and practices into the development pipeline to identify and mitigate vulnerabilities early on. - Centralized Logging and Monitoring: Implement centralized logging and monitoring systems to track system activity, detect anomalies, and respond to security incidents effectively."
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Client Credentials Grant flow with OAuth2 using requests library",
+        "code": "import requests\n\n# Configuration\ntoken_url = 'https://your-pingfederate-server/as/token.oauth2'\nclient_id = 'your_client_id'\nclient_secret = 'your_client_secret'\n\ndef get_access_token():\n    data = {\n        'grant_type': 'client_credentials',\n        'scope': 'your_api_scope'\n    }\n    response = requests.post(token_url, data=data, auth=(client_id, client_secret))\n    response.raise_for_status()  # Raise an exception for bad status codes\n    return response.json()['access_token']\n\n# Usage example\naccess_token = get_access_token()\nheaders = {'Authorization': f'Bearer {access_token}'}\nresponse = requests.get('https://your-api-endpoint/resource', headers=headers)\nprint(response.json())"
+      },
+      {
+        "language": "python",
+        "description": "Integration with PingFederate using the pingfed library for client registration",
+        "code": "from pingfed import PingFederate\n\n# Configuration\npingfed_config = {\n    'base_url': 'https://your-pingfederate-server',\n    'username': 'your_admin_username',\n    'password': 'your_admin_password'\n}\n\n# Create a PingFederate client instance\npf = PingFederate(**pingfed_config)\n\n# Define the client registration data\nclient_data = {\n    'clientId': 'your_client_id',\n    'clientName': 'Your Client Name',\n    'clientSecret': 'your_client_secret',\n    'grantTypes': ['client_credentials'],\n    'redirectUris': [],\n    'scopes': ['your_api_scope']\n}\n\n# Register the client\ntry:\n    pf.clients.create(client_data)\nexcept pf.PingFederateException as e:\n    if e.status_code == 409:\n        print('Client already exists')\n    else:\n        raise"
+      },
+      {
+        "language": "python",
+        "description": "Error handling for token retrieval and API access",
+        "code": "import requests\nfrom requests.exceptions import RequestException\n\ndef get_data_from_api():\n    try:\n        access_token = get_access_token()  # Assume this function exists\n        headers = {'Authorization': f'Bearer {access_token}'}\n        response = requests.get('https://your-api-endpoint/resource', headers=headers)\n\n        # Handle potential API errors\n        response.raise_for_status()\n        return response.json()\n\n    except requests.exceptions.HTTPError as errh:\n        print(f\"HTTP Error: {errh}\")\n    except requests.exceptions.ConnectionError as errc:\n        print(f\"Error Connecting: {errc}\")\n    except requests.exceptions.Timeout as errt:\n        print(f\"Timeout Error: {errt}\")\n    except requests.exceptions.RequestException as err:\n        print(f\"Something went wrong: {err}\")\n    except Exception as e:\n        print(f\"An unexpected error occurred: {e}\")"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful application registration and resource access",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am a system administrator"
+          },
+          {
+            "keyword": "When",
+            "text": "I register an application for machine-to-machine access"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application is registered successfully"
+          },
+          {
+            "keyword": "And",
+            "text": "I obtain valid client credentials (client ID and secret)"
+          },
+          {
+            "keyword": "When",
+            "text": "The application authenticates using the client credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application is authenticated successfully"
+          },
+          {
+            "keyword": "And",
+            "text": "The application can access authorized resources"
+          }
+        ]
+      },
+      {
+        "name": "Handling invalid client credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "An application attempts to authenticate"
+          },
+          {
+            "keyword": "When",
+            "text": "The application provides invalid client credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "The authentication fails"
+          },
+          {
+            "keyword": "And",
+            "text": "An appropriate error message is returned (e.g., \"Invalid client ID or secret.\")"
+          }
+        ]
+      },
+      {
+        "name": "Enforcing rate limiting",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A rate limit is set for API requests"
+          },
+          {
+            "keyword": "When",
+            "text": "An application exceeds the rate limit"
+          },
+          {
+            "keyword": "Then",
+            "text": "Subsequent requests from the application are throttled"
+          },
+          {
+            "keyword": "And",
+            "text": "An appropriate error message is returned (e.g., \"Rate limit exceeded. Please try again later.\")"
+          }
+        ]
+      },
+      {
+        "name": "Verifying secure communication",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Two systems are communicating via the API"
+          },
+          {
+            "keyword": "Then",
+            "text": "The communication channel is secured using TLS/SSL encryption"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-3",
+    "title": "User Story - Validate and Authorize API Requests",
+    "type": "User Story",
+    "description": {
+      "role": "Application",
+      "goal": "Validate incoming access tokens and enforce authorization rules",
+      "benefit": "Only authorized users and applications can access protected resources",
+      "formatted": "As an Application, I want to validate incoming access tokens and enforce authorization rules, so that only authorized users and applications can access protected resources"
+    },
+    "technical_domain": "Authentication and Authorization",
+    "complexity": "High",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [],
+    "suggested_assignee": "Unassigned",
+    "dependencies": [
+      "OAuth 2 implementation",
+      "PING Federate integration"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "- Security Vulnerabilities: Lack of proper API request validation and authorization exposes protected resources to unauthorized access, leading to data breaches, unauthorized operations, and system compromise. - Inconsistent Access Control: Without a centralized authorization mechanism, access control policies might be scattered and inconsistently applied across different application components, increasing the risk of unauthorized access. - Compliance Issues: Failing to comply with industry regulations and data privacy standards (e.g., GDPR, HIPAA) regarding user data protection can lead to legal repercussions and reputational damage. - Poor User Experience: Unauthorized access attempts result in generic error messages, providing little information to users about the issue or how to resolve it, leading to frustration and support requests.",
+      "success_metrics": "- Reduction in Unauthorized Access Attempts: Track the number of unauthorized API requests before and after implementation to measure the effectiveness of access control measures. - Improved API Security Posture: Conduct regular security audits and penetration testing to identify and address any vulnerabilities related to API authentication and authorization. - Increased Development Efficiency: Implementing a standardized and reusable authorization framework reduces development time and effort for securing new APIs and resources. - Enhanced User Experience: Provide clear and informative error messages to users upon unauthorized access attempts, guiding them towards proper authentication or authorization procedures.",
+      "similar_implementations": "- Auth0: A cloud-based identity management platform offering authentication and authorization services, including OAuth 2 and OpenID Connect support. - Okta: Another popular identity and access management solution providing similar features to Auth0, including API access management and token validation. - Keycloak: An open-source identity and access management solution that can be deployed on-premises or in the cloud, offering features like OAuth 2, OpenID Connect, and fine-grained authorization policies.",
+      "modern_approaches": "- Zero Trust Security: Adopt a Zero Trust security model that assumes no user or device is inherently trustworthy and requires verification for every access request. - Microservices Authentication and Authorization: Implement decentralized authorization mechanisms within a microservices architecture, allowing each service to handle its own authentication and authorization logic. - Role-Based Access Control (RBAC) with Attribute-Based Access Control (ABAC): Combine RBAC with ABAC to define fine-grained access control policies based on user roles, attributes, and resource context. - OAuth 2 and OpenID Connect (OIDC): Leverage industry-standard protocols like OAuth 2 and OIDC for secure delegation of user authentication and authorization to a trusted identity provider. - JSON Web Token (JWT) Best Practices: Follow JWT security best practices, including secure key management, short token lifetimes, and appropriate use of claims for authorization."
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Validating JWT access tokens and enforcing authorization based on roles using Flask",
+        "code": "python\nfrom functools import wraps\nfrom flask import request, jsonify\nfrom jose import jwt, JWTError\n\n# Configuration\nJWT_ALGORITHM = 'RS256'\nJWKS_URL = 'https://your-pingfederate-domain.com/.well-known/jwks.json'\n\n# Fetch public keys from PING Federate\ndef get_public_keys():\n    # Implement logic to fetch and cache JWKS from PING Federate\n    pass\n\n# Authorization decorator\ndef authorize(roles=None):\n    def decorator(f):\n        @wraps(f)\n        def decorated_function(*args, **kwargs):\n            try:\n                token = request.headers.get('Authorization').split(\" \")[1]\n                public_keys = get_public_keys()\n                payload = jwt.decode(token, public_keys, algorithms=[JWT_ALGORITHM])\n\n                # Role-based authorization\n                user_roles = payload.get('roles', [])\n                if roles and not any(role in user_roles for role in roles):\n                    return jsonify({'message': 'Unauthorized'}), 403\n\n                return f(*args, **kwargs)\n            except (jwt.JWTError, IndexError, AttributeError) as e:\n                return jsonify({'message': 'Invalid or missing token'}), 401\n        return decorated_function\n    return decorator\n\n# Example route\n@app.route('/api/protected', methods=['GET'])\n@authorize(roles=['admin'])\ndef protected_route():\n    return jsonify({'message': 'This is a protected resource.'})"
+      },
+      {
+        "language": "python",
+        "description": "Handling token expiry and audience validation",
+        "code": "python\nimport time\nfrom jose import jwt, JWTError, ExpiredSignatureError\n\n# ... (previous code)\n\n# Authorization decorator\ndef authorize(roles=None):\n    # ... (previous code)\n\n                # Token validation\n                payload = jwt.decode(\n                    token,\n                    public_keys,\n                    algorithms=[JWT_ALGORITHM],\n                    audience='your-audience',\n                    options={'verify_exp': True}\n                )\n\n                # Check for token expiry\n                if time.time() > payload['exp']:\n                    return jsonify({'message': 'Token has expired'}), 401\n\n                # ... (rest of the code)"
+      },
+      {
+        "language": "python",
+        "description": "Centralized error handling for authentication and authorization failures",
+        "code": "python\nfrom flask import Flask, jsonify\n\napp = Flask(__name__)\n\n# ... (previous code)\n\n@app.errorhandler(401)\nauthenticate_error(error):\n    return jsonify({'message': 'Authentication required'}), 401\n\n@app.errorhandler(403)\nforbidden_error(error):\n    return jsonify({'message': 'Forbidden'}), 403"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "User with valid token and permissions accesses a protected resource",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "a user with a valid access token and required permissions"
+          },
+          {
+            "keyword": "When",
+            "text": "the user makes a request to a protected resource"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application validates the token against PING Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is granted access to the resource"
+          }
+        ]
+      },
+      {
+        "name": "User with expired token is denied access",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "a user with an expired access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the user makes a request to a protected resource"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application validates the token against PING Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application returns a 401 Unauthorized error with a descriptive message"
+          }
+        ]
+      },
+      {
+        "name": "User with insufficient permissions is denied access",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "a user with a valid access token but lacking required permissions"
+          },
+          {
+            "keyword": "When",
+            "text": "the user makes a request to a protected resource"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application validates the token against PING Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application returns a 403 Forbidden error with a descriptive message"
+          }
+        ]
+      },
+      {
+        "name": "Application handles token validation under high load",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "a high volume of concurrent requests"
+          },
+          {
+            "keyword": "When",
+            "text": "users make requests with valid access tokens"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application validates all tokens within an acceptable timeframe (e.g., under 500ms)"
+          }
+        ]
+      },
+      {
+        "name": "Application provides informative error messages for users with disabilities",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "a user with a screen reader"
+          },
+          {
+            "keyword": "When",
+            "text": "the user encounters an authentication or authorization error"
+          },
+          {
+            "keyword": "Then",
+            "text": "the error message is read clearly by the screen reader"
+          },
+          {
+            "keyword": "And",
+            "text": "the error message provides clear instructions on how to resolve the issue"
+          }
+        ]
+      }
+    ]
+  }
+]

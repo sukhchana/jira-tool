@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any, List
-from services.jira_breakdown_service import JiraBreakdownService
 from services.jira_orchestration_service import JiraOrchestrationService
 from services.response_formatter_service import ResponseFormatterService
 from services.revision_service import RevisionService
+from breakdown import ExecutionManager
 from uuid_extensions import uuid7
 from models import (
     TicketGenerationRequest,
@@ -33,8 +33,8 @@ router = APIRouter()
 )
 async def generate_ticket_description(request: TicketGenerationRequest):
     """Generate a JIRA ticket description using LLM"""
-    jira_breakdown_service = JiraBreakdownService(request.epic_key)
-    return await jira_breakdown_service.generate_ticket_description(
+    execution_manager = ExecutionManager(request.epic_key)
+    return await execution_manager.epic_analyzer.generate_ticket_description(
         context=request.context,
         requirements=request.requirements,
         additional_info=request.additional_info
@@ -49,8 +49,8 @@ async def generate_ticket_description(request: TicketGenerationRequest):
 )
 async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
     """Analyze the complexity of a ticket"""
-    jira_breakdown_service = JiraBreakdownService(request.epic_key)
-    return await jira_breakdown_service.analyze_ticket_complexity(
+    execution_manager = ExecutionManager(request.epic_key)
+    return await execution_manager.epic_analyzer.analyze_complexity(
         ticket_description=request.ticket_description
     )
 
@@ -58,9 +58,9 @@ async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
 async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
     """Break down a JIRA epic into smaller tasks"""
     try:
-        jira_breakdown_service = JiraBreakdownService(epic_key)
+        execution_manager = ExecutionManager(epic_key)
         response_formatter = ResponseFormatterService()
-        result = await jira_breakdown_service.break_down_epic()
+        result = await execution_manager.execute_breakdown()
         return response_formatter.format_epic_breakdown(result)
         
     except Exception as e:
@@ -86,9 +86,9 @@ async def create_epic_subtasks(
     logger.info(f"Received request to create subtasks for epic: {epic_key}")
     logger.debug(f"Create in JIRA: {create_in_jira}, Dry run: {dry_run}")
     
-    jira_breakdown_service = JiraBreakdownService(epic_key)
+    execution_manager = ExecutionManager(epic_key)
     jira_orchestration_service = JiraOrchestrationService()
-    breakdown = await jira_breakdown_service.break_down_epic()
+    breakdown = await execution_manager.execute_breakdown()
     
     if dry_run:
         execution_plan = await jira_orchestration_service.create_execution_plan(
@@ -359,4 +359,46 @@ async def list_executions():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to list executions: {str(e)}"
+        )
+
+@router.post("/rerun-subtasks/{epic_key}/{source_execution_id}", response_model=JiraEpicBreakdownResult)
+async def rerun_subtask_generation(
+    epic_key: str,
+    source_execution_id: str
+) -> JiraEpicBreakdownResult:
+    """
+    Rerun subtask generation for an epic using state from a previous execution.
+    
+    This endpoint:
+    1. Creates a new execution
+    2. Loads the epic details, analysis, and high-level tasks from the source execution
+    3. Regenerates subtasks for all high-level tasks
+    4. Returns a new breakdown result with the updated subtasks
+    
+    Args:
+        epic_key: The JIRA key of the epic
+        source_execution_id: The execution ID to load state from
+        
+    Returns:
+        A new JiraEpicBreakdownResult with regenerated subtasks
+    """
+    try:
+        logger.info(f"Rerunning subtask generation for epic {epic_key} from execution {source_execution_id}")
+        execution_manager = ExecutionManager(epic_key)
+        response_formatter = ResponseFormatterService()
+        
+        result = await execution_manager.rerun_subtask_generation(epic_key, source_execution_id)
+        return response_formatter.format_epic_breakdown(result.dict())
+        
+    except FileNotFoundError as e:
+        logger.error(f"Source execution state not found: {str(e)}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source execution state not found: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to rerun subtask generation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to rerun subtask generation: {str(e)}"
         ) 

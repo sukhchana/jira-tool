@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional, List
 from loguru import logger
 from .base_parser import BaseParser
+from models.sub_task import SubTask
 import re
 import xml.etree.ElementTree as ET
 
@@ -8,67 +9,56 @@ class SubtaskParser(BaseParser):
     """Parser for subtasks"""
     
     @classmethod
-    def parse(cls, content: str) -> Dict[str, Any]:
-        """Parse a subtask from content"""
+    def parse(cls, content: str) -> List[SubTask]:
+        """
+        Parse subtasks from content.
+        
+        Args:
+            content: The content string containing one or more subtasks
+            
+        Returns:
+            List of SubTask objects
+        """
         try:
             # Clean up the content first
             content = cls._clean_xml_content(content)
             logger.debug(f"Parsing subtask content of length: {len(content)}")
             
-            # Ensure proper XML structure
-            if not content.strip().startswith("<subtask>"):
-                content = f"<subtask>{content}</subtask>"
+            # Split content into individual subtasks if multiple exist
+            subtask_contents = cls._split_into_subtasks(content)
+            subtasks = []
+            
+            for subtask_content in subtask_contents:
+                try:
+                    # Ensure proper XML structure
+                    if not subtask_content.strip().startswith("<subtask>"):
+                        subtask_content = f"<subtask>{subtask_content}</subtask>"
 
-            # Extract fields using regex patterns
-            task = {
-                "type": "Subtask",
-                "title": cls._extract_xml_content(content, "title", "Untitled Subtask"),
-                "description": cls._extract_xml_content(content, "description", "No description provided"),
-                "story_points": cls._parse_story_points(cls._extract_xml_content(content, "story_points", "3")),
-                
-                # Technical details section
-                "required_skills": cls._parse_list_items_from_text(
-                    cls._extract_xml_content(content, "technical_details/required_skills", "")
-                ),
-                "suggested_assignee": cls._extract_xml_content(content, "technical_details/suggested_assignee", "Unassigned"),
-                
-                # Implementation approach
-                "implementation_approach": {
-                    "steps": cls._extract_xml_list(content, "implementation_approach/steps/step"),
-                    "code_blocks": cls._extract_code_blocks(content)
-                },
-                
-                # Acceptance criteria
-                "acceptance_criteria": cls._extract_xml_list(content, "acceptance_criteria/criterion"),
-                
-                # Dependencies
-                "dependencies": cls._extract_xml_list(content, "dependencies/dependency"),
-                
-                # Testing
-                "testing": {
-                    "unit_tests": cls._extract_xml_content(content, "testing/unit_tests", ""),
-                    "integration_tests": cls._extract_xml_content(content, "testing/integration_tests", ""),
-                    "edge_cases": cls._extract_xml_content(content, "testing/edge_cases", "")
-                }
-            }
+                    # Extract fields using regex patterns
+                    subtask = SubTask(
+                        title=cls._extract_xml_content(subtask_content, "title", "Untitled Subtask"),
+                        description=cls._extract_xml_content(subtask_content, "description", "No description provided"),
+                        story_points=cls._parse_story_points(cls._extract_xml_content(subtask_content, "story_points", "3")),
+                        required_skills=cls._parse_list_items_from_text(
+                            cls._extract_xml_content(subtask_content, "technical_details/required_skills", "")
+                        ),
+                        suggested_assignee=cls._extract_xml_content(subtask_content, "technical_details/suggested_assignee", "Unassigned"),
+                        dependencies=cls._extract_xml_list(subtask_content, "dependencies/dependency"),
+                        acceptance_criteria=cls._extract_xml_content(subtask_content, "acceptance_criteria", "")
+                    )
+                    subtasks.append(subtask)
+                        
+                except Exception as e:
+                    logger.error(f"Failed to parse individual subtask: {str(e)}")
+                    logger.error(f"Subtask content:\n{subtask_content}")
+                    subtasks.append(cls._create_error_subtask(str(e)))
             
-            # Validate required fields
-            required_fields = ["title", "description", "story_points"]
-            missing_fields = [
-                field for field in required_fields 
-                if not task.get(field)
-            ]
-            
-            if missing_fields:
-                logger.error(f"Missing required fields: {', '.join(missing_fields)}")
-                return cls._create_error_subtask(f"Missing required fields: {', '.join(missing_fields)}")
-            
-            return task
+            return subtasks if subtasks else [cls._create_error_subtask("No valid subtasks found")]
             
         except Exception as e:
-            logger.error(f"Failed to parse subtask: {str(e)}")
+            logger.error(f"Failed to parse subtasks: {str(e)}")
             logger.error(f"Content:\n{content}")
-            return cls._create_error_subtask(str(e))
+            return [cls._create_error_subtask(str(e))]
 
     @classmethod
     def _extract_xml_content(cls, content: str, path: str, default: str = "") -> str:
@@ -126,27 +116,17 @@ class SubtaskParser(BaseParser):
             return 3
 
     @classmethod
-    def _create_error_subtask(cls, error_msg: str) -> Dict[str, Any]:
+    def _create_error_subtask(cls, error_msg: str) -> SubTask:
         """Create an error subtask with minimal required fields"""
-        return {
-            "type": "Subtask",
-            "title": "Error parsing subtask",
-            "description": f"Failed to parse: {error_msg}",
-            "story_points": 3,
-            "required_skills": [],
-            "suggested_assignee": "Unassigned",
-            "implementation_approach": {
-                "steps": [],
-                "code_blocks": []
-            },
-            "acceptance_criteria": [],
-            "dependencies": [],
-            "testing": {
-                "unit_tests": "",
-                "integration_tests": "",
-                "edge_cases": ""
-            }
-        }
+        return SubTask(
+            title="Error parsing subtask",
+            description=f"Failed to parse: {error_msg}",
+            story_points=3,
+            required_skills=[],
+            suggested_assignee="Unassigned",
+            dependencies=[],
+            acceptance_criteria="Error occurred during parsing"
+        )
 
     @classmethod
     def _clean_xml_content(cls, content: str) -> str:
@@ -177,4 +157,21 @@ class SubtaskParser(BaseParser):
             if item.strip() and item.strip().lower() not in ['none', 'n/a', '-']
         ]
         
-        return items 
+        return items
+
+    @classmethod
+    def _split_into_subtasks(cls, content: str) -> List[str]:
+        """Split content into individual subtask blocks"""
+        # Try to split by <subtask> tags first
+        subtasks = re.findall(r'<subtask>.*?</subtask>', content, re.DOTALL)
+        if subtasks:
+            return subtasks
+            
+        # If no <subtask> tags found, try to split by numbered items
+        subtasks = re.split(r'\n\s*\d+\.\s+', content)
+        if len(subtasks) > 1:
+            # Remove empty or whitespace-only items
+            return [s.strip() for s in subtasks[1:] if s.strip()]
+            
+        # If no clear separation found, treat as single subtask
+        return [content] if content.strip() else [] 

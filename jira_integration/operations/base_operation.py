@@ -39,17 +39,67 @@ class BaseJiraOperation:
     def _get_issue(self, issue_key: str) -> Optional[Dict[str, Any]]:
         """Get a JIRA issue by key"""
         try:
-            issue = self.jira.issue(issue_key)
-            return {
-                "key": issue.key,
-                "summary": issue.fields.summary,
-                "description": issue.fields.description or "",
-                "status": issue.fields.status.name,
-                "issue_type": issue.fields.issuetype.name,
-                "project": issue.fields.project.key
-            }
+            logger.info(f"Making JIRA API call to fetch issue: {issue_key}")
+            
+            # Verify JIRA connection
+            if not hasattr(self, 'jira') or not self.jira:
+                logger.error("JIRA client not properly initialized")
+                return None
+            
+            try:
+                issue = self.jira.issue(issue_key)
+                logger.debug(f"Successfully retrieved issue from JIRA API")
+                logger.debug(f"Issue type: {type(issue)}")
+            except Exception as e:
+                logger.error(f"JIRA API call failed: {str(e)}")
+                return None
+            
+            # Extract basic issue data
+            try:
+                # Verify we have access to all required fields
+                if not hasattr(issue, 'fields'):
+                    logger.error("Issue object does not have 'fields' attribute")
+                    logger.debug(f"Issue object attributes: {dir(issue)}")
+                    return None
+                
+                if not hasattr(issue.fields, 'issuetype') or not hasattr(issue.fields.issuetype, 'name'):
+                    logger.error("Issue type information is missing or incomplete")
+                    return None
+                
+                issue_data = {
+                    "key": issue.key,
+                    "summary": issue.fields.summary,
+                    "description": issue.fields.description or "",
+                    "status": {
+                        "name": issue.fields.status.name if hasattr(issue.fields.status, 'name') else "Unknown"
+                    },
+                    "issuetype": {
+                        "name": issue.fields.issuetype.name
+                    },
+                    "project": {
+                        "key": issue.fields.project.key if hasattr(issue.fields.project, 'key') else "Unknown"
+                    },
+                    "created": getattr(issue.fields, 'created', None),
+                    "updated": getattr(issue.fields, 'updated', None)
+                }
+                
+                logger.debug(f"Extracted issue data structure: {issue_data}")
+                
+                # Verify the returned data is a dictionary
+                if not isinstance(issue_data, dict):
+                    logger.error(f"Unexpected issue_data type: {type(issue_data)}")
+                    return None
+                    
+                return issue_data
+                
+            except AttributeError as e:
+                logger.error(f"Failed to extract issue data - missing attribute: {str(e)}")
+                logger.debug(f"Raw issue data: {vars(issue)}")
+                return None
+                
         except Exception as e:
             logger.error(f"Failed to get JIRA issue {issue_key}: {str(e)}")
+            logger.exception("Full traceback:")
             return None
     
     def _create_issue(

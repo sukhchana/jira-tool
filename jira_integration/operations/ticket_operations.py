@@ -102,28 +102,55 @@ class TicketOperations(BaseJiraOperation):
     ) -> Optional[Dict[str, Any]]:
         """Get detailed information about a ticket"""
         try:
+            logger.debug(f"Fetching ticket details for {ticket_key}")
             ticket = self._get_issue(ticket_key)
+            
             if not ticket:
+                logger.error(f"No ticket found with key {ticket_key}")
+                return None
+                
+            if not isinstance(ticket, dict):
+                logger.error(f"Unexpected ticket data type: {type(ticket)}")
                 return None
             
-            if include_subtasks and ticket["issue_type"] in ["Story", "Task"]:
-                # Get subtasks
-                jql = f'parent = {ticket_key} ORDER BY created ASC'
-                subtasks = self.jira.search_issues(jql)
+            # Get issue type from the new structure
+            issue_type = ticket.get("issuetype", {}).get("name")
+            if not issue_type:
+                logger.error(f"Could not determine issue type for ticket {ticket_key}")
+                return None
                 
-                ticket["subtasks"] = [
-                    {
-                        "key": subtask.key,
-                        "summary": subtask.fields.summary,
-                        "status": subtask.fields.status.name
-                    }
-                    for subtask in subtasks
-                ]
+            logger.debug(f"Ticket {ticket_key} is of type {issue_type}")
             
+            if include_subtasks and issue_type in ["Story", "Task"]:
+                logger.info(f"Fetching subtasks for {ticket_key}")
+                # Get subtasks
+                try:
+                    jql = f'parent = {ticket_key} ORDER BY created ASC'
+                    logger.debug(f"Subtask JQL query: {jql}")
+                    subtasks = self.jira.search_issues(jql)
+                    logger.info(f"Found {len(subtasks)} subtasks")
+                    
+                    # Process subtasks with the new structure
+                    ticket["subtasks"] = [
+                        {
+                            "key": subtask.key,
+                            "summary": subtask.fields.summary,
+                            "status": {
+                                "name": subtask.fields.status.name if hasattr(subtask.fields.status, 'name') else "Unknown"
+                            }
+                        }
+                        for subtask in subtasks
+                    ]
+                except Exception as e:
+                    logger.error(f"Failed to fetch subtasks: {str(e)}")
+                    ticket["subtasks"] = []
+            
+            logger.debug(f"Final ticket data structure: {ticket}")
             return ticket
             
         except Exception as e:
             logger.error(f"Failed to get ticket details for {ticket_key}: {str(e)}")
+            logger.exception("Full traceback:")
             return None
     
     async def get_linked_tickets(

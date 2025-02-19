@@ -7,6 +7,7 @@ from services.execution_log_service import ExecutionLogService
 from llm.vertexllm import VertexLLM
 from models.user_story import UserStory
 from models.technical_task import TechnicalTask
+from models.sub_task import SubTask
 from parsers import SubtaskParser
 from .breakdown_summary_logger import log_completion_summary
 import json
@@ -24,7 +25,7 @@ class SubtaskGenerator:
         epic_details: Dict[str, Any],
         task_tracker: TaskTracker,
         proposed_tickets: ProposedTicketsService
-    ) -> None:
+    ) -> List[SubTask]:
         """
         Break down User Stories and Technical Tasks into detailed subtasks.
         
@@ -33,7 +34,12 @@ class SubtaskGenerator:
             epic_details: Details of the parent epic
             task_tracker: TaskTracker instance
             proposed_tickets: ProposedTicketsService instance
+            
+        Returns:
+            List of SubTask objects
         """
+        all_subtasks: List[SubTask] = []
+        
         try:
             # Process each task
             for task in high_level_tasks:
@@ -44,6 +50,9 @@ class SubtaskGenerator:
                     # Generate subtasks
                     subtasks = await self._generate_subtasks(task_dict, epic_details)
                     
+                    # Add to all subtasks list
+                    all_subtasks.extend(subtasks)
+                    
                     # Log the breakdown
                     self.execution_log.log_section(
                         f"Subtasks for {task.title}", 
@@ -51,16 +60,16 @@ class SubtaskGenerator:
                             "parent_task": task.title,
                             "parent_type": task.type,
                             "subtask_count": len(subtasks),
-                            "total_points": sum(st['story_points'] for st in subtasks),
-                            "subtasks": subtasks
+                            "total_points": sum(st.story_points for st in subtasks),
+                            "subtasks": [st.dict() for st in subtasks]
                         }, indent=2)
                     )
                     
                     # Add subtasks to tracking systems
-                    task_tracker.add_subtasks(task.title, subtasks)
+                    task_tracker.add_subtasks(task.title, [st.dict() for st in subtasks])
                     proposed_tickets.add_subtasks(
                         parent_name=task.title,
-                        subtasks=subtasks,
+                        subtasks=[st.dict() for st in subtasks],
                         parent_id=task.id
                     )
                     
@@ -72,6 +81,8 @@ class SubtaskGenerator:
                     logger.error(f"Task details: {json.dumps(task.dict(), indent=2)}")
                     raise
             
+            return all_subtasks
+            
         except Exception as e:
             logger.error(f"Failed to break down tasks: {str(e)}")
             logger.error(f"High-level tasks: {json.dumps([t.dict() for t in high_level_tasks], indent=2)}")
@@ -81,7 +92,7 @@ class SubtaskGenerator:
         self,
         parent_task: Dict[str, Any],
         epic_details: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+    ) -> List[SubTask]:
         """
         Generate subtasks for a high-level task.
         
@@ -109,8 +120,8 @@ class SubtaskGenerator:
             # Log parsed results
             logger.info(f"Parsed {len(subtasks)} subtasks for {parent_task['title']}:")
             for subtask in subtasks:
-                logger.info(f"- {subtask['title']} ({subtask['story_points']} points)")
-                logger.debug(f"  Details: {json.dumps(subtask, indent=2)}")
+                logger.info(f"- {subtask.title} ({subtask.story_points} points)")
+                logger.debug(f"  Details: {json.dumps(subtask.dict(), indent=2)}")
             
             return subtasks
             

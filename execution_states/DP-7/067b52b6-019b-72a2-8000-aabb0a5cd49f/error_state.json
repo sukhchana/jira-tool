@@ -1,0 +1,44 @@
+{
+  "error": "7 validation errors for BreakdownInfo\nexecution_plan.user_stories\n  Input should be a valid integer [type=int_type, input_value=[{'id': 'USER-STORY-1', '...resolve the issue'}]}]}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.6/v/int_type\nexecution_plan.technical_tasks\n  Input should be a valid integer [type=int_type, input_value=[{'id': 'TECHNICAL-TASK-1...oints and user roles.'}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.6/v/int_type\nexecution_plan.total_subtasks\n  Field required [type=missing, input_value={'user_stories': [{'id': ...ints and user roles.'}]}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.file\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.summary\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.high_level_tasks\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.subtasks_by_parent\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing",
+  "task_tracker_summary": {
+    "user_stories": 3,
+    "technical_tasks": 5,
+    "subtasks": 27,
+    "subtasks_by_parent": {
+      "User Story - Securely Access Application Resources": 4,
+      "User Story - Enable Machine-to-Machine Communication": 3,
+      "User Story - Validate and Authorize API Requests": 3,
+      "Technical Task - Implement OAuth 2 Authorization Code Grant Flow": 5,
+      "Technical Task - Implement OAuth 2 Client Credentials Grant Flow": 2,
+      "Technical Task - Configure PING Federate as OAuth 2 Server": 3,
+      "Technical Task - Integrate OpenID Connect for User Details and Roles": 3,
+      "Technical Task - Implement Token Validation and Authorization Middleware": 4
+    },
+    "errors": [
+      "7 validation errors for BreakdownInfo\nexecution_plan.user_stories\n  Input should be a valid integer [type=int_type, input_value=[{'id': 'USER-STORY-1', '...resolve the issue'}]}]}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.6/v/int_type\nexecution_plan.technical_tasks\n  Input should be a valid integer [type=int_type, input_value=[{'id': 'TECHNICAL-TASK-1...oints and user roles.'}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.6/v/int_type\nexecution_plan.total_subtasks\n  Field required [type=missing, input_value={'user_stories': [{'id': ...ints and user roles.'}]}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.file\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.summary\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.high_level_tasks\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing\nproposed_tickets.subtasks_by_parent\n  Field required [type=missing, input_value={'user_story_subtasks': [...otal_story_points': 162}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.6/v/missing"
+    ]
+  },
+  "epic_analysis": {
+    "main_objective": "Enable secure authentication for both machine-to-machine and human-to-machine interactions using OAuth 2, leveraging the existing Enterprise Active Directory and PING Federate as the OAuth 2 server.",
+    "technical_domains": [
+      "Authentication and Authorization:**",
+      "Best Practices:** Implement secure OAuth 2 flows, validate tokens, and enforce authorization based on user roles.",
+      "Technologies:** Python libraries like Flask-OAuthlib, oauthlib, requests-oauthlib.",
+      "Identity Management:**",
+      "Best Practices:** Utilize OpenID Connect (OIDC) for user authentication and attribute retrieval from Active Directory.",
+      "Technologies:**  OpenID Connect libraries for Python (e.g., pyoidc).",
+      "API Security:**",
+      "Best Practices:** Secure communication with PING Federate using HTTPS, implement proper error handling, and protect sensitive information.",
+      "Technologies:** TLS/SSL encryption, Python libraries for secure communication."
+    ],
+    "core_requirements": [
+      "OAuth 2 Implementation:** Implement OAuth 2 flows (Authorization Code Grant for human users, Client Credentials Grant for machine-to-machine) in the Python application.",
+      "Active Directory Integration:**  Utilize OpenID Connect (OIDC) to authenticate users against the Enterprise Active Directory, sourcing user details and roles.",
+      "PING Federate Integration:**  Configure PING Federate as the OAuth 2 Authorization Server and establish communication for token issuance and validation."
+    ],
+    "stakeholders": [
+      "Application Users:** Both human and machine users requiring access to the application.",
+      "System Administrators:** Responsible for managing user access and system security."
+    ]
+  }
+}

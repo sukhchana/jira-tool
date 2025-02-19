@@ -1,4 +1,3 @@
-from .epic_info import EpicInfo
 from .analysis_info import AnalysisInfo
 from .jira_task_definition import JiraTaskDefinition
 from .execution_plan_stats import ExecutionPlanStats
@@ -19,7 +18,6 @@ from .execution_record import ExecutionRecord
 from .revision_record import RevisionRecord
 
 __all__ = [
-    'EpicInfo',
     'AnalysisInfo',
     'JiraTaskDefinition',
     'ExecutionPlanStats',

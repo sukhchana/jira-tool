@@ -1,0 +1,19 @@
+{
+  "key": "DP-7",
+  "summary": "Add Authentication with OAUTH 2 and integrate with Enterprise Active Directory",
+  "description": "Add Authentication with OAUTH 2 and integrate with Enterprise Active Directory\n\nAdd the ability to support OAUTH 2 authentication, where machine to machine and human to machine capabilities are supported. \n\nThe human to machine population will already have identities in Active Directory. \n\nEnsure there is a way to source their details, using perhaps OpenID Connect, specify what fields people should be using for certain things, i.e. what field contains a users user-id etc\u2026\n\nRemember the project is written in Python, so specify a plan of action to support this. \n\nRemember also that the enterprise OAUTH 2 server exists and is implemented by PING Federate",
+  "issue_type": "Epic",
+  "status": "To Do",
+  "project_key": "DP",
+  "created": "2025-01-23T00:31:23.518+0000",
+  "updated": "2025-01-23T00:31:23.772+0000",
+  "assignee": null,
+  "reporter": null,
+  "priority": null,
+  "labels": [],
+  "components": [],
+  "parent_key": null,
+  "epic_key": null,
+  "story_points": null,
+  "custom_fields": {}
+}
