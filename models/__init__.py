@@ -16,6 +16,21 @@ from .jira_project import JiraProject
 from .revision_request import RevisionRequest, RevisionConfirmation, RevisionResponse
 from .execution_record import ExecutionRecord
 from .revision_record import RevisionRecord
+from .epic_breakdown_response import EpicBreakdownResponse
+from .sub_task import SubTask
+from .high_level_task import HighLevelTask
+from .technical_task import TechnicalTask, ImplementationApproach
+from .task_group import TaskGroup
+from .user_story import (
+    GherkinStep,
+    GherkinScenario,
+    ResearchSummary,
+    CodeBlock,
+    StoryDescription,
+    ImplementationNotes,
+    UserStory
+)
+from .proposed_ticket_mongo import ProposedTicketMongo
 
 __all__ = [
     'AnalysisInfo',
@@ -37,5 +52,19 @@ __all__ = [
     'RevisionConfirmation',
     'RevisionResponse',
     'ExecutionRecord',
-    'RevisionRecord'
+    'RevisionRecord',
+    'EpicBreakdownResponse',
+    'SubTask',
+    'HighLevelTask',
+    'TechnicalTask',
+    'ImplementationApproach',
+    'TaskGroup',
+    'GherkinStep',
+    'GherkinScenario',
+    'ResearchSummary',
+    'CodeBlock',
+    'StoryDescription',
+    'ImplementationNotes',
+    'UserStory',
+    'ProposedTicketMongo'
 ]

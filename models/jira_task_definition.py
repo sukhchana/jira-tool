@@ -4,5 +4,5 @@ class JiraTaskDefinition(BaseModel):
     """Represents a high-level JIRA task definition"""
     id: str
     type: str
-    name: str
+    title: str
     complexity: str 

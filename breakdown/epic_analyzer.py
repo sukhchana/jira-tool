@@ -55,7 +55,7 @@ class EpicAnalyzer:
                 "Epic Analysis",
                 prompt,
                 response,
-                epic_analysis.dict()
+                epic_analysis.model_dump()
             )
             
             return epic_analysis

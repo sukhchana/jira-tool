@@ -1,10 +1,18 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Union
 
 class HighLevelTask(BaseModel):
     """Model representing a high-level task/story"""
-    name: str
-    description: str
+    title: str
+    type: str = Field("High Level Task", description="The type of the task (User Story or Technical Task)")
+    description: Union[str, Dict[str, Any]]  # Can be either a string (for technical tasks) or a dict (for user stories)
     technical_domain: str
     complexity: str
-    dependencies: List[str] 
+    dependencies: List[str]
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to ensure type field is always included"""
+        data = super().model_dump(**kwargs)
+        if "type" not in data:
+            data["type"] = self.type
+        return data 

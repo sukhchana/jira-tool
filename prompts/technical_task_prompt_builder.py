@@ -41,8 +41,8 @@ class TechnicalTaskPromptBuilder(BasePromptBuilder):
             "complexity": "Low|Medium|High",
             "business_value": "Low|Medium|High",
             "story_points": "1|2|3|5|8|13",
-            "required_skills": ["skill1", "skill2"],
-            "suggested_assignee": "Role best suited for this task",
+            "required_skills": ["List of specific technical skills needed for implementation (e.g. React, Node.js, PostgreSQL)"],
+            "suggested_assignee": "Role or specialty best suited for this task (e.g. Frontend Developer, Backend Developer, DevOps)",
             "dependencies": ["dependency1", "dependency2"],
             "implementation_approach": {{
                 "architecture": "System architecture components and data flow",
@@ -56,6 +56,13 @@ class TechnicalTaskPromptBuilder(BasePromptBuilder):
             "monitoring_needs": "Monitoring and observability needs",
             "testing_requirements": "Testing requirements and approach"
         }}
+
+        Guidelines:
+        1. Each task should be focused on a specific technical implementation
+        2. Include clear acceptance criteria and testing requirements
+        3. Specify required skills based on the technical domain and implementation needs
+        4. Suggest assignee based on the technical domain and required skills
+        5. Consider dependencies between tasks and with user stories
 
         Return ONLY the JSON array, no additional text or explanation.
         """

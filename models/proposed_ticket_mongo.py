@@ -1,7 +1,8 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 from datetime import datetime
 from uuid_extensions import uuid7
+from .base_model import BaseModel
 
 class ProposedTicketMongo(BaseModel):
     """MongoDB model for a proposed ticket"""

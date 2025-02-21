@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class GherkinStep(BaseModel):
@@ -56,4 +56,11 @@ class UserStory(BaseModel):
     # Additional components generated separately
     research_summary: Optional[ResearchSummary] = Field(None, description="Research summary for the story")
     code_blocks: List[CodeBlock] = Field(default_factory=list, description="Example code blocks")
-    scenarios: List[GherkinScenario] = Field(default_factory=list, description="Acceptance criteria as Gherkin scenarios") 
+    scenarios: List[GherkinScenario] = Field(default_factory=list, description="Acceptance criteria as Gherkin scenarios")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to ensure type field is always included"""
+        data = super().model_dump(**kwargs)
+        if "type" not in data:
+            data["type"] = "User Story"
+        return data 

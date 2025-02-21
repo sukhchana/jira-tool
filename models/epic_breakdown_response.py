@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 from typing import List, Dict, Any, Optional
 from .task_group import TaskGroup
 from datetime import datetime
 from .analysis_info import AnalysisInfo
 from .breakdown_info import BreakdownInfo
 from .metrics_info import MetricsInfo
+from .base_model import BaseModel
 
 class EpicBreakdownResponse(BaseModel):
     """Response model containing the complete epic breakdown

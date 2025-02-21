@@ -16,3 +16,4 @@ urllib3
 tabulate
 pymongo
 google-genai
+pydantic-settings

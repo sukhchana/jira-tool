@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 from datetime import datetime
 from typing import Optional
+from .base_model import BaseModel
 
 class ExecutionRecord(BaseModel):
     execution_id: str = Field(..., description="UUID7 of the execution")

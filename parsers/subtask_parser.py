@@ -2,8 +2,7 @@ from typing import Dict, Any, Optional, List
 from loguru import logger
 from .base_parser import BaseParser
 from models.sub_task import SubTask
-import re
-import xml.etree.ElementTree as ET
+from utils.json_sanitizer import JSONSanitizer
 
 class SubtaskParser(BaseParser):
     """Parser for subtasks"""
@@ -11,46 +10,53 @@ class SubtaskParser(BaseParser):
     @classmethod
     def parse(cls, content: str) -> List[SubTask]:
         """
-        Parse subtasks from content.
+        Parse subtasks from JSON content.
         
         Args:
-            content: The content string containing one or more subtasks
+            content: The content string containing a JSON array of subtasks
             
         Returns:
             List of SubTask objects
         """
         try:
-            # Clean up the content first
-            content = cls._clean_xml_content(content)
             logger.debug(f"Parsing subtask content of length: {len(content)}")
             
-            # Split content into individual subtasks if multiple exist
-            subtask_contents = cls._split_into_subtasks(content)
-            subtasks = []
+            # Parse JSON content
+            subtasks_data = JSONSanitizer.safe_parse(content)
+            if not isinstance(subtasks_data, list):
+                logger.error("Expected JSON array of subtasks")
+                return [cls._create_error_subtask("Invalid response format - expected JSON array")]
             
-            for subtask_content in subtask_contents:
+            subtasks = []
+            for subtask_data in subtasks_data:
                 try:
-                    # Ensure proper XML structure
-                    if not subtask_content.strip().startswith("<subtask>"):
-                        subtask_content = f"<subtask>{subtask_content}</subtask>"
-
-                    # Extract fields using regex patterns
+                    # Create SubTask object from JSON data
                     subtask = SubTask(
-                        title=cls._extract_xml_content(subtask_content, "title", "Untitled Subtask"),
-                        description=cls._extract_xml_content(subtask_content, "description", "No description provided"),
-                        story_points=cls._parse_story_points(cls._extract_xml_content(subtask_content, "story_points", "3")),
-                        required_skills=cls._parse_list_items_from_text(
-                            cls._extract_xml_content(subtask_content, "technical_details/required_skills", "")
+                        title=subtask_data.get("title", "Untitled Subtask"),
+                        description=subtask_data.get("description", "No description provided"),
+                        technical_domain=subtask_data.get("technical_domain", "Unknown"),
+                        complexity=cls._validate_enum(
+                            subtask_data.get("complexity", "Medium"),
+                            ["Low", "Medium", "High"],
+                            "Medium"
                         ),
-                        suggested_assignee=cls._extract_xml_content(subtask_content, "technical_details/suggested_assignee", "Unassigned"),
-                        dependencies=cls._extract_xml_list(subtask_content, "dependencies/dependency"),
-                        acceptance_criteria=cls._extract_xml_content(subtask_content, "acceptance_criteria", "")
+                        business_value=cls._validate_enum(
+                            subtask_data.get("business_value", "Medium"),
+                            ["Low", "Medium", "High"],
+                            "Medium"
+                        ),
+                        story_points=cls._validate_story_points(subtask_data.get("story_points", 3)),
+                        required_skills=subtask_data.get("required_skills", []),
+                        suggested_assignee=subtask_data.get("suggested_assignee", "Unassigned"),
+                        dependencies=subtask_data.get("dependencies", []),
+                        acceptance_criteria=subtask_data.get("acceptance_criteria", []),
+                        parent_id=subtask_data.get("parent_id", "")
                     )
                     subtasks.append(subtask)
                         
                 except Exception as e:
                     logger.error(f"Failed to parse individual subtask: {str(e)}")
-                    logger.error(f"Subtask content:\n{subtask_content}")
+                    logger.error(f"Subtask data:\n{subtask_data}")
                     subtasks.append(cls._create_error_subtask(str(e)))
             
             return subtasks if subtasks else [cls._create_error_subtask("No valid subtasks found")]
@@ -59,6 +65,34 @@ class SubtaskParser(BaseParser):
             logger.error(f"Failed to parse subtasks: {str(e)}")
             logger.error(f"Content:\n{content}")
             return [cls._create_error_subtask(str(e))]
+
+    @staticmethod
+    def _validate_story_points(points: Any) -> int:
+        """Validate and normalize story points"""
+        try:
+            if isinstance(points, str):
+                points = int(points)
+            valid_points = [1, 2, 3, 5, 8, 13]
+            return min(valid_points, key=lambda x: abs(x - points))
+        except (ValueError, TypeError):
+            return 3
+
+    @classmethod
+    def _create_error_subtask(cls, error_msg: str) -> SubTask:
+        """Create an error subtask with minimal required fields"""
+        return SubTask(
+            title="Error parsing subtask",
+            description=f"Failed to parse: {error_msg}",
+            technical_domain="Unknown",
+            complexity="Medium",
+            business_value="Medium",
+            story_points=3,
+            required_skills=[],
+            suggested_assignee="Unassigned",
+            dependencies=[],
+            acceptance_criteria=["Error occurred during parsing"],
+            parent_id=""
+        )
 
     @classmethod
     def _extract_xml_content(cls, content: str, path: str, default: str = "") -> str:
@@ -114,19 +148,6 @@ class SubtaskParser(BaseParser):
             return min(valid_points, key=lambda x: abs(x - points))
         except (ValueError, AttributeError):
             return 3
-
-    @classmethod
-    def _create_error_subtask(cls, error_msg: str) -> SubTask:
-        """Create an error subtask with minimal required fields"""
-        return SubTask(
-            title="Error parsing subtask",
-            description=f"Failed to parse: {error_msg}",
-            story_points=3,
-            required_skills=[],
-            suggested_assignee="Unassigned",
-            dependencies=[],
-            acceptance_criteria="Error occurred during parsing"
-        )
 
     @classmethod
     def _clean_xml_content(cls, content: str) -> str:

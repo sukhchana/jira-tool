@@ -28,8 +28,8 @@ class UserStoryPromptBuilder(BasePromptBuilder):
             "complexity": "Low|Medium|High",
             "business_value": "Low|Medium|High",
             "story_points": "1|2|3|5|8|13",
-            "required_skills": ["skill1", "skill2"],
-            "suggested_assignee": "Role best suited for this story",
+            "required_skills": ["List of specific technical skills needed for implementation (e.g. React, Node.js, PostgreSQL)"],
+            "suggested_assignee": "Role or specialty best suited for this story (e.g. Frontend Developer, Backend Developer, Full Stack)",
             "dependencies": ["dependency1", "dependency2"],
             "acceptance_criteria": ["criterion1", "criterion2"],
             "implementation_notes": {{
@@ -38,6 +38,13 @@ class UserStoryPromptBuilder(BasePromptBuilder):
                 "accessibility": "Accessibility requirements"
             }}
         }}
+
+        Guidelines:
+        1. Each story should be focused on a single user goal
+        2. Include clear acceptance criteria
+        3. Specify required skills based on technical implementation needs
+        4. Suggest assignee based on the primary technical domain and skills
+        5. Consider dependencies between stories
 
         Return ONLY the JSON array, no additional text or explanation.
         """

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class ImplementationApproach(BaseModel):
@@ -26,4 +26,11 @@ class TechnicalTask(BaseModel):
     performance_impact: str = Field(..., description="Performance impact analysis")
     scalability_considerations: str = Field(..., description="Scalability considerations")
     monitoring_needs: str = Field(..., description="Monitoring and observability needs")
-    testing_requirements: str = Field(..., description="Testing requirements and approach") 
+    testing_requirements: str = Field(..., description="Testing requirements and approach")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to ensure type field is always included"""
+        data = super().model_dump(**kwargs)
+        if "type" not in data:
+            data["type"] = "Technical Task"
+        return data 

@@ -1,6 +1,7 @@
-from typing import Any, List, Union, Tuple
+from typing import Any, List, Union, Tuple, Dict, Optional
 from loguru import logger
 from breakdown.breakdown_summary_logger import log_completion_summary
+from models.jira_task_definition import JiraTaskDefinition
 from services.jira_service import JiraService
 from services.execution_log_service import ExecutionLogService
 from services.task_tracker import TaskTracker
@@ -17,6 +18,9 @@ from models.jira_ticket_details import JiraTicketDetails
 from models.epic_breakdown_response import EpicBreakdownResponse
 from models.breakdown_info import BreakdownInfo
 from models.metrics_info import MetricsInfo
+from models.execution_plan_stats import ExecutionPlanStats
+from models.proposed_tickets import ProposedTickets
+from models.task_group import TaskGroup
 from uuid_extensions import uuid7
 import json
 from pathlib import Path
@@ -94,8 +98,8 @@ class ExecutionManager:
             epic_details.description
         )
         
-        self._save_state("epic_details.json", epic_details.dict())
-        self._save_state("epic_analysis.json", epic_analysis.dict())
+        self._save_state("epic_details.json", epic_details.model_dump())
+        self._save_state("epic_analysis.json", epic_analysis.model_dump())
         
         return epic_details, epic_analysis
 
@@ -122,12 +126,12 @@ class ExecutionManager:
             Exception: If story generation fails or state cannot be saved
         """
         user_stories = await self.user_story_generator.generate_user_stories(
-            epic_analysis.dict(),
+            epic_analysis.model_dump(),
             task_tracker,
             self.proposed_tickets
         )
         
-        self._save_state("user_stories.json", [story.dict() for story in user_stories])
+        self._save_state("user_stories.json", [story.model_dump() for story in user_stories])
         return user_stories
 
     async def generate_technical_tasks(
@@ -156,12 +160,12 @@ class ExecutionManager:
         """
         technical_tasks = await self.technical_task_generator.generate_technical_tasks(
             user_stories,
-            epic_analysis.dict(),
+            epic_analysis.model_dump(),
             task_tracker,
             self.proposed_tickets
         )
         
-        self._save_state("technical_tasks.json", [task.dict() for task in technical_tasks])
+        self._save_state("technical_tasks.json", [task.model_dump() for task in technical_tasks])
         return technical_tasks
 
     async def generate_subtasks(
@@ -192,12 +196,12 @@ class ExecutionManager:
         """
         subtasks = await self.subtask_generator.break_down_tasks(
             high_level_tasks,
-            epic_details.dict(),
+            epic_details.model_dump(),
             task_tracker,
             self.proposed_tickets
         )
         
-        self._save_state(f"{task_type}_subtasks.json", [subtask.dict() for subtask in subtasks])
+        self._save_state(f"{task_type}_subtasks.json", [subtask.model_dump() for subtask in subtasks])
         return subtasks
 
     def _save_state(self, filename: str, data: Any) -> None:
@@ -214,7 +218,8 @@ class ExecutionManager:
         """
         filepath = self.state_dir / filename
         with open(filepath, 'w') as f:
-            json.dump(data, f, indent=2)
+            # Use custom JSON encoder for datetime objects
+            json.dump(data, f, indent=2, default=lambda x: x.isoformat() if hasattr(x, 'isoformat') else str(x))
         logger.info(f"Saved state to {filepath}")
 
     def _load_state(self, filename: str) -> Any:
@@ -346,20 +351,40 @@ class ExecutionManager:
                 )
                 
                 response = EpicBreakdownResponse(
+                    execution_id=self.execution_id,
                     epic_key=self.epic_key,
                     epic_summary=epic_details.summary,
                     analysis=epic_analysis,
                     breakdown=BreakdownInfo(
-                        execution_plan={
-                            "user_stories": [story.dict() for story in user_stories],
-                            "technical_tasks": [task.dict() for task in technical_tasks]
-                        },
-                        proposed_tickets={
-                            "user_story_subtasks": [subtask.dict() for subtask in user_story_subtasks],
-                            "technical_task_subtasks": [subtask.dict() for subtask in technical_task_subtasks],
-                            "total_count": len(all_subtasks),
-                            "total_story_points": sum(subtask.story_points for subtask in all_subtasks)
-                        }
+                        execution_plan=ExecutionPlanStats(
+                            user_stories=len(user_stories),
+                            technical_tasks=len(technical_tasks),
+                            total_subtasks=len(all_subtasks)
+                        ),
+                        proposed_tickets=ProposedTickets(
+                            file=self.proposed_tickets.filename,
+                            summary={
+                                "total_tasks": len(all_tasks),
+                                "total_subtasks": len(all_subtasks),
+                                "task_types": {
+                                    "user_stories": len(user_stories),
+                                    "technical_tasks": len(technical_tasks)
+                                }
+                            },
+                            high_level_tasks=[
+                                JiraTaskDefinition(
+                                    id=task.id,
+                                    type="User Story" if isinstance(task, UserStory) else "Technical Task",
+                                    title=task.title,
+                                    complexity=task.complexity
+                                )
+                                for task in all_tasks
+                            ],
+                            subtasks_by_parent={
+                                task.title: len([st for st in all_subtasks if st.parent_id == task.id])
+                                for task in all_tasks
+                            }
+                        )
                     ),
                     metrics=MetricsInfo(
                         total_story_points=sum(subtask.story_points for subtask in all_subtasks),
@@ -370,11 +395,20 @@ class ExecutionManager:
                             for skill in subtask.required_skills
                         ))
                     ),
-                    tasks=all_tasks,
-                    execution_plan=self.execution_log.filename
+                    tasks=[{
+                        "high_level_task": task.model_dump(),
+                        "subtasks": [
+                            st.model_dump() for st in all_subtasks if st.parent_id == task.id
+                        ]
+                    } for task in all_tasks],
+                    execution_plan_file=self.execution_log.filename,
+                    proposed_tickets_file=self.proposed_tickets.filename
                 )
-                
-                self._save_state("final_result.json", response.dict())
+
+                try:
+                    self._save_state("final_result.json", response.model_dump())
+                except Exception as e:
+                    logger.error(f"Error saving final result: {str(e)}")
                 return response
                 
             except Exception as e:
@@ -462,7 +496,7 @@ class ExecutionManager:
         self._save_state("error_state.json", {
             "error": str(error),
             "task_tracker_summary": error_summary,
-            "epic_analysis": epic_analysis.dict()
+            "epic_analysis": epic_analysis.model_dump()
         })
 
     def _handle_fatal_error(self, error: Exception) -> None:

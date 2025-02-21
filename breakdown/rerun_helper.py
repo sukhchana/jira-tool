@@ -7,11 +7,14 @@ from models.analysis_info import AnalysisInfo
 from models.user_story import UserStory
 from models.technical_task import TechnicalTask
 from models.sub_task import SubTask
+from models.execution_plan_stats import ExecutionPlanStats
+from models.proposed_tickets import ProposedTickets
+from models.breakdown_info import BreakdownInfo
+from models.metrics_info import MetricsInfo
+from models.jira_task_definition import JiraTaskDefinition
 from services.task_tracker import TaskTracker
 from breakdown.execution_manager import ExecutionManager
 from breakdown.breakdown_summary_logger import log_completion_summary
-from models.breakdown_info import BreakdownInfo
-from models.metrics_info import MetricsInfo
 import json
 
 class RerunHelper:
@@ -100,16 +103,35 @@ class RerunHelper:
                     epic_summary=epic_details.summary,
                     analysis=epic_analysis,
                     breakdown=BreakdownInfo(
-                        execution_plan={
-                            "user_stories": [story.dict() for story in user_stories],
-                            "technical_tasks": [task.dict() for task in technical_tasks]
-                        },
-                        proposed_tickets={
-                            "user_story_subtasks": [subtask.dict() for subtask in user_story_subtasks],
-                            "technical_task_subtasks": [subtask.dict() for subtask in technical_task_subtasks],
-                            "total_count": len(all_subtasks),
-                            "total_story_points": sum(subtask.story_points for subtask in all_subtasks)
-                        }
+                        execution_plan=ExecutionPlanStats(
+                            user_stories=len(user_stories),
+                            technical_tasks=len(technical_tasks),
+                            total_subtasks=len(all_subtasks)
+                        ),
+                        proposed_tickets=ProposedTickets(
+                            file=execution_manager.proposed_tickets.filename,
+                            summary={
+                                "total_tasks": len(user_stories) + len(technical_tasks),
+                                "total_subtasks": len(all_subtasks),
+                                "task_types": {
+                                    "user_stories": len(user_stories),
+                                    "technical_tasks": len(technical_tasks)
+                                }
+                            },
+                            high_level_tasks=[
+                                JiraTaskDefinition(
+                                    id=task.id,
+                                    type="User Story" if isinstance(task, UserStory) else "Technical Task",
+                                    title=task.title,
+                                    complexity=task.complexity
+                                )
+                                for task in (user_stories + technical_tasks)
+                            ],
+                            subtasks_by_parent={
+                                task.title: len([st for st in all_subtasks if st.parent_id == task.id])
+                                for task in (user_stories + technical_tasks)
+                            }
+                        )
                     ),
                     metrics=MetricsInfo(
                         total_story_points=sum(subtask.story_points for subtask in all_subtasks),
@@ -121,18 +143,17 @@ class RerunHelper:
                         ))
                     ),
                     tasks=[{
-                        "high_level_task": task.dict(),
+                        "high_level_task": task.model_dump(),
                         "subtasks": [
-                            st for st in (user_story_subtasks if isinstance(task, UserStory) else technical_task_subtasks)
-                            if st.parent_id == task.id
+                            st.model_dump() for st in all_subtasks if st.parent_id == task.id
                         ]
-                    } for task in user_stories + technical_tasks],
+                    } for task in (user_stories + technical_tasks)],
                     execution_plan_file=execution_manager.execution_log.filename,
                     proposed_tickets_file=execution_manager.proposed_tickets.filename
                 )
                 
                 # Save final state
-                execution_manager._save_state("final_result.json", response.dict())
+                execution_manager._save_state("final_result.json", response.model_dump())
                 execution_manager.proposed_tickets.save()
                 
                 # Log completion summary
@@ -141,9 +162,27 @@ class RerunHelper:
                 return response
                 
             except Exception as e:
-                execution_manager._handle_task_generation_error(e, task_tracker, epic_analysis)
+                cls._handle_task_generation_error(e, task_tracker, epic_analysis)
                 raise
                 
         except Exception as e:
-            execution_manager._handle_fatal_error(e)
-            raise 
+            cls._handle_fatal_error(e)
+            raise
+
+    @staticmethod
+    def _handle_task_generation_error(
+        error: Exception,
+        task_tracker: TaskTracker,
+        epic_analysis: AnalysisInfo
+    ) -> None:
+        """Handle errors during task generation"""
+        logger.error(f"Task generation error: {str(error)}")
+        logger.error(f"Epic analysis: {epic_analysis.model_dump()}")
+        logger.error(f"Task tracker state: {task_tracker.get_all_tasks()}")
+        logger.exception("Full traceback:")
+
+    @staticmethod
+    def _handle_fatal_error(error: Exception) -> None:
+        """Handle fatal errors during execution"""
+        logger.error(f"Fatal error occurred: {str(error)}")
+        logger.exception("Full traceback:") 

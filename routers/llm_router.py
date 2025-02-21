@@ -21,6 +21,7 @@ from datetime import datetime
 import os
 import yaml
 from services.mongodb_service import MongoDBService
+from breakdown.rerun_helper import RerunHelper
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
         execution_manager = ExecutionManager(epic_key)
         response_formatter = ResponseFormatterService()
         result = await execution_manager.execute_breakdown()
+        logger.info(f"Breakdown result: {result}")
         return response_formatter.format_epic_breakdown(result)
         
     except Exception as e:
@@ -384,11 +386,10 @@ async def rerun_subtask_generation(
     """
     try:
         logger.info(f"Rerunning subtask generation for epic {epic_key} from execution {source_execution_id}")
-        execution_manager = ExecutionManager(epic_key)
         response_formatter = ResponseFormatterService()
         
-        result = await execution_manager.rerun_subtask_generation(epic_key, source_execution_id)
-        return response_formatter.format_epic_breakdown(result.dict())
+        result = await RerunHelper.rerun_subtask_generation(epic_key, source_execution_id)
+        return response_formatter.format_epic_breakdown(result.model_dump())
         
     except FileNotFoundError as e:
         logger.error(f"Source execution state not found: {str(e)}")

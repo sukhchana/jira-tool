@@ -92,7 +92,7 @@ class MongoDBService:
                     epic_key=epic_key,
                     execution_id=execution_id
                 )
-                result = self.proposed_tickets.insert_one(story_doc.dict())
+                result = self.proposed_tickets.insert_one(story_doc.model_dump())
                 proposal_ids.append(str(story_doc.proposal_id))
                 
                 # Process subtasks if any
@@ -118,7 +118,7 @@ class MongoDBService:
                         epic_key=epic_key,
                         execution_id=execution_id
                     )
-                    result = self.proposed_tickets.insert_one(subtask_doc.dict())
+                    result = self.proposed_tickets.insert_one(subtask_doc.model_dump())
                     proposal_ids.append(str(subtask_doc.proposal_id))
             
             # Process technical tasks
@@ -141,7 +141,7 @@ class MongoDBService:
                     epic_key=epic_key,
                     execution_id=execution_id
                 )
-                result = self.proposed_tickets.insert_one(task_doc.dict())
+                result = self.proposed_tickets.insert_one(task_doc.model_dump())
                 proposal_ids.append(str(task_doc.proposal_id))
                 
                 # Process subtasks if any
@@ -167,7 +167,7 @@ class MongoDBService:
                         epic_key=epic_key,
                         execution_id=execution_id
                     )
-                    result = self.proposed_tickets.insert_one(subtask_doc.dict())
+                    result = self.proposed_tickets.insert_one(subtask_doc.model_dump())
                     proposal_ids.append(str(subtask_doc.proposal_id))
             
             return proposal_ids

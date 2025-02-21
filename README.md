@@ -32,45 +32,119 @@ The application follows a modular, service-oriented architecture:
    - `logger.py`: Centralized logging configuration
 
 ### Architecture Flow
-┌─────────────────┐
-│ │
-│ Client Request │
-│ │
-└────────┬────────┘
-│
-▼
-┌─────────────────┐
-│ FastAPI Router │
-└────────┬────────┘
-│
-▼
-┌───────────────────────────┐
-│ JiraBreakdownService │
-└──┬────────────┬────────┬──┘
-│ │ │
-┌──────────────┘ │ └──────────────┐
-▼ ▼ ▼
-┌────────────────────┐ ┌────────────────────┐ ┌─────────────────────┐
-│ VertexLLM │ │ PromptBuilders │ │ TicketParser │
-│ │ │ │ │ │
-└─────────┬──────────┘ └────────┬──────────┘ └──────────┬──────────┘
-│ │ │
-▼ │ │
-┌────────────────────┐ │ │
-│ Vertex AI API │ │ │
-└────────┬──────────┘ │ │
-│ │ │
-└───────────────────────────┼──────────────────────────┘
-│
-▼
-┌────────────────────┐
-│ JIRA Service │
-└────────┬───────────┘
-│
-▼
-┌────────────────────┐
-│ JIRA API │
-└────────────────────┘
+```mermaid
+graph TD
+    A[Client Request] --> B[FastAPI Router]
+    B --> C[JiraBreakdownService]
+    C --> D[VertexLLM]
+    C --> E[PromptBuilders]
+    C --> F[TicketParser]
+    D --> G[Vertex AI API]
+    E --> D
+    F --> C
+    C --> H[JIRA Service]
+    H --> I[JIRA API]
+```
+
+### Task Generation Flows
+
+#### Subtask Generation Flow
+```mermaid
+sequenceDiagram
+    participant Parent Task
+    participant SubtaskGenerator
+    participant LLM
+    participant SubtaskParser
+    participant SubTask Model
+
+    Parent Task->>SubtaskGenerator: Request subtask breakdown
+    SubtaskGenerator->>LLM: Generate base subtasks
+    LLM-->>SubtaskGenerator: JSON response
+    SubtaskGenerator->>SubtaskParser: Parse response
+    SubtaskParser-->>SubtaskGenerator: Base subtasks
+
+    loop For each subtask
+        SubtaskGenerator->>LLM: Generate implementation approach
+        LLM-->>SubtaskGenerator: Implementation details
+        SubtaskGenerator->>LLM: Generate code examples
+        LLM-->>SubtaskGenerator: Code examples
+        SubtaskGenerator->>LLM: Generate testing plan
+        LLM-->>SubtaskGenerator: Test scenarios
+        SubtaskGenerator->>LLM: Generate research summary
+        LLM-->>SubtaskGenerator: Technical research
+        SubtaskGenerator->>SubTask Model: Combine all details
+    end
+
+    SubtaskGenerator-->>Parent Task: Return enriched subtasks
+```
+
+#### User Story Generation Flow
+```mermaid
+sequenceDiagram
+    participant Epic Analysis
+    participant UserStoryGenerator
+    participant LLM
+    participant UserStoryParser
+    participant UserStory Model
+
+    Epic Analysis->>UserStoryGenerator: Request user stories
+    UserStoryGenerator->>LLM: Generate user stories
+    LLM-->>UserStoryGenerator: JSON response
+    UserStoryGenerator->>UserStoryParser: Parse response
+    UserStoryParser-->>UserStoryGenerator: Base user stories
+
+    loop For each story
+        UserStoryGenerator->>LLM: Generate research summary
+        LLM-->>UserStoryGenerator: Research details
+        UserStoryGenerator->>LLM: Generate code examples
+        LLM-->>UserStoryGenerator: Code examples
+        UserStoryGenerator->>LLM: Generate Gherkin scenarios
+        LLM-->>UserStoryGenerator: Test scenarios
+        UserStoryGenerator->>UserStory Model: Combine all details
+    end
+
+    UserStoryGenerator-->>Epic Analysis: Return enriched user stories
+```
+
+#### Technical Task Generation Flow
+```mermaid
+sequenceDiagram
+    participant User Stories
+    participant TechnicalTaskGenerator
+    participant LLM
+    participant TechnicalTaskParser
+    participant TechnicalTask Model
+
+    User Stories->>TechnicalTaskGenerator: Request technical tasks
+    TechnicalTaskGenerator->>LLM: Generate technical tasks
+    LLM-->>TechnicalTaskGenerator: JSON response
+    TechnicalTaskGenerator->>TechnicalTaskParser: Parse response
+    TechnicalTaskParser-->>TechnicalTaskGenerator: Base technical tasks
+
+    loop For each task
+        TechnicalTaskGenerator->>LLM: Generate technical research
+        LLM-->>TechnicalTaskGenerator: Research details
+        TechnicalTaskGenerator->>LLM: Generate code examples
+        LLM-->>TechnicalTaskGenerator: Code examples
+        TechnicalTaskGenerator->>LLM: Generate Gherkin scenarios
+        LLM-->>TechnicalTaskGenerator: Test scenarios
+        TechnicalTaskGenerator->>TechnicalTask Model: Combine all details
+    end
+
+    TechnicalTaskGenerator-->>User Stories: Return enriched technical tasks
+```
+
+These diagrams illustrate the detailed flow of task generation in the system. Each type of task (subtasks, user stories, and technical tasks) follows a similar pattern:
+
+1. Initial generation of base tasks
+2. Enrichment with additional details through multiple LLM calls
+3. Parsing and validation of responses
+4. Combination of all details into the final model
+
+The key differences are in:
+- The context used for generation (epic analysis, user stories, etc.)
+- The specific prompts and enrichment steps
+- The final model structure and required fields
 
 ## Setup
 
