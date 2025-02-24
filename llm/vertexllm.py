@@ -1,22 +1,24 @@
 # Only import bootstrap when not running as main
 if __name__ != "__main__":
-    from utils import bootstrap  # This must be the first import
+    pass
 
-import os
 import asyncio
-from typing import Optional, Dict, Any
-from loguru import logger
+import os
+from typing import Dict, Any
+
 import vertexai
+from google.oauth2 import service_account
+from loguru import logger
 from vertexai.generative_models import (
-    GenerativeModel, 
-    GenerationConfig, 
-    SafetySetting, 
-    HarmCategory, 
+    GenerativeModel,
+    GenerationConfig,
+    SafetySetting,
+    HarmCategory,
     HarmBlockThreshold,
     Tool,
     grounding
 )
-from google.oauth2 import service_account
+
 
 def get_safety_settings():
     """Get permissive safety settings for Vertex AI"""
@@ -54,15 +56,12 @@ class VertexLLM:
 
     def __init__(self):
         self.initialize_vertex_ai()
-    
 
     def get_credentials(self) -> service_account.Credentials:
         credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         if not credentials_path:
             raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is required")
         return service_account.Credentials.from_service_account_file(credentials_path)
-
-
 
     def initialize_vertex_ai(self):
         """Initialize Vertex AI client with project and endpoint settings"""
@@ -71,10 +70,10 @@ class VertexLLM:
             project_id = os.getenv('GCP_PROJECT_ID')
             location = os.getenv('VERTEX_LOCATION', 'us-central1')
             endpoint = os.getenv('VERTEX_API_ENDPOINT', f'{location}-aiplatform.googleapis.com')
-            
+
             if not project_id:
                 raise ValueError("GCP_PROJECT_ID environment variable is required")
-            
+
             # Initialize Vertex AI with specific configurations
             vertexai.init(
                 project=project_id,
@@ -83,18 +82,18 @@ class VertexLLM:
                 credentials=self.get_credentials(),
                 api_transport="rest"
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI LLM: {str(e)}")
             raise
-    
+
     async def generate_content(
-        self,
-        prompt: str,
-        temperature: float = 0.2,
-        top_p: float = 0.8,
-        top_k: int = 40,
-        **kwargs: Dict[str, Any]
+            self,
+            prompt: str,
+            temperature: float = 0.2,
+            top_p: float = 0.8,
+            top_k: int = 40,
+            **kwargs: Dict[str, Any]
     ) -> str:
         """
         Generate content using Vertex AI's Gemini model.
@@ -115,7 +114,7 @@ class VertexLLM:
         try:
             logger.debug(f"Generating content with temperature={temperature}")
             logger.debug(f"Prompt length: {len(prompt)} characters")
-            
+
             # Configure generation parameters
             generation_config = GenerationConfig(
                 temperature=temperature,
@@ -123,7 +122,7 @@ class VertexLLM:
                 top_k=top_k,
                 candidate_count=1
             )
-            
+
             model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
             self.model = GenerativeModel(model_version)
 
@@ -134,27 +133,27 @@ class VertexLLM:
                 safety_settings=get_safety_settings(),
                 **kwargs
             )
-            
+
             generated_text = response.text
-            
+
             # # Log just the response to console
             # logger.info("\n" + "="*80)
             # logger.info("LLM RESPONSE:")
             # logger.info(generated_text)
             # logger.info("="*80 + "\n")
-            
+
             return generated_text
-            
+
         except Exception as e:
             logger.error(f"Failed to generate content: {str(e)}")
             logger.error(f"Prompt that caused error:\n{prompt}")
             raise
 
     async def generate_content_with_search(
-        self,
-        prompt: str,
-        temperature: float = 0.2,
-        **kwargs: Dict[str, Any]
+            self,
+            prompt: str,
+            temperature: float = 0.2,
+            **kwargs: Dict[str, Any]
     ) -> str:
         """
         Generate content using Vertex AI's Gemini model with Google Search grounding.
@@ -173,22 +172,22 @@ class VertexLLM:
         try:
             logger.debug(f"Generating content with Google Search grounding")
             logger.debug(f"Prompt length: {len(prompt)} characters")
-            
+
             # Create Google Search grounding tool
             search_tool = Tool.from_google_search_retrieval(
                 grounding.GoogleSearchRetrieval()
             )
-            
+
             # Configure generation parameters
             generation_config = GenerationConfig(
                 temperature=temperature,
                 candidate_count=1,
                 **kwargs
             )
-            
+
             model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
             self.model = GenerativeModel(model_version)
-            
+
             # Generate content using the model with search grounding
             response = self.model.generate_content(
                 prompt,
@@ -196,23 +195,25 @@ class VertexLLM:
                 tools=[search_tool],
                 safety_settings=get_safety_settings()
             )
-            
+
             return response.text
-            
+
         except Exception as e:
             logger.error(f"Failed to generate content with search: {str(e)}")
             logger.error(f"Prompt that caused error:\n{prompt}")
             raise
 
+
 if __name__ == "__main__":
     # Configure logging
     logger.add("vertexllm_test.log", rotation="500 MB")
-    
+
+
     async def test_llm():
         try:
             print("Initializing VertexLLM...")
             llm = VertexLLM()
-            
+
             # # Test regular generation
             # print("\nTesting regular generation:")
             # response = await llm.generate_content(
@@ -220,7 +221,7 @@ if __name__ == "__main__":
             #     temperature=0.7
             # )
             # print(response)
-            
+
             # Test generation with search
             print("\nTesting generation with Google Search grounding:")
             response = await llm.generate_content_with_search(
@@ -229,10 +230,11 @@ if __name__ == "__main__":
                 temperature=0.0
             )
             print(response)
-            
+
         except Exception as e:
             logger.error(f"Test failed: {str(e)}")
             raise
+
 
     # Run the test
     print("Starting VertexLLM test...")
@@ -242,5 +244,5 @@ if __name__ == "__main__":
     print("- VERTEX_MODEL_VERSION (optional, defaults to gemini-1.5-pro)")
     print("- GOOGLE_APPLICATION_CREDENTIALS (path to service account key)")
     print("\nRunning tests...")
-    
+
     asyncio.run(test_llm())

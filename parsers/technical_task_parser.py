@@ -1,21 +1,24 @@
-from typing import Dict, Any, Optional, List
-from loguru import logger
-from .base_parser import BaseParser
 import json
+from typing import Dict, Any, Optional, List
+
+from loguru import logger
+
+from .base_parser import BaseParser
+
 
 class TechnicalTaskParser(BaseParser):
     """Parser for technical tasks"""
-    
+
     @classmethod
     def parse_from_response(cls, response: str) -> List[Dict[str, Any]]:
         """Extract and parse all technical tasks from a response"""
         try:
-            # Parse JSON array, handling markdown code blocks
+            # Parse JSON array, handling Markdown code blocks
             tasks = cls.parse_json_content(response)
             if not isinstance(tasks, list):
                 logger.error("Response is not a JSON array")
                 return []
-                
+
             parsed_tasks = []
             for i, task in enumerate(tasks, 1):
                 try:
@@ -27,10 +30,10 @@ class TechnicalTaskParser(BaseParser):
                 except Exception as e:
                     logger.error(f"Failed to parse technical task {i}: {str(e)}")
                     continue
-            
+
             logger.info(f"Successfully parsed {len(parsed_tasks)} technical tasks")
             return parsed_tasks
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {str(e)}")
             logger.error(f"Raw response:\n{response}")
@@ -45,7 +48,7 @@ class TechnicalTaskParser(BaseParser):
         try:
             # Validate required fields
             required_fields = [
-                "title", "description", "technical_domain", 
+                "title", "description", "technical_domain",
                 "implementation_approach", "performance_impact",
                 "scalability_considerations", "monitoring_needs",
                 "testing_requirements"
@@ -150,4 +153,4 @@ class TechnicalTaskParser(BaseParser):
             "scalability_considerations": "Error parsing task",
             "monitoring_needs": "Error parsing task",
             "testing_requirements": "Error parsing task"
-        } 
+        }

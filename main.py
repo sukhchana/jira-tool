@@ -1,11 +1,13 @@
-from utils import bootstrap  # This must be the first import
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+from fastapi.responses import JSONResponse
+
 from routers import jira_router, llm_router
 from utils.logger import logger
-from fastapi.responses import JSONResponse
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,6 +19,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Shutting down JIRA Ticket Creator API")
+
 
 app = FastAPI(
     title="JIRA Ticket Creator API",
@@ -49,6 +52,7 @@ app.include_router(
     tags=["llm"]
 )
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     logger.error(f"HTTP error occurred: {exc.detail}")
@@ -56,6 +60,7 @@ async def http_exception_handler(request, exc):
         status_code=exc.status_code,
         content={"detail": exc.detail}
     )
+
 
 if __name__ == "__main__":
     logger.info("Initializing JIRA Ticket Creator API")

@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import Field
+
 from models.base_model import BaseModel
+
 
 class RevisionDetails(BaseModel):
     """Model for storing revision information"""
@@ -17,4 +20,4 @@ class RevisionDetails(BaseModel):
     created_at: datetime = Field(..., description="When the revision was created")
     updated_at: Optional[datetime] = Field(None, description="When the revision was last updated")
     accepted: Optional[bool] = Field(None, description="Whether the revision was accepted")
-    accepted_at: Optional[datetime] = Field(None, description="When the revision was accepted") 
+    accepted_at: Optional[datetime] = Field(None, description="When the revision was accepted")

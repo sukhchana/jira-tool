@@ -1,9 +1,11 @@
 from typing import Dict, Any, List
+
 from .base_prompt_builder import BasePromptBuilder
+
 
 class TechnicalTaskPromptBuilder(BasePromptBuilder):
     """Builder for technical task generation prompts"""
-    
+
     @staticmethod
     def build_technical_tasks_prompt(user_stories: List[Dict[str, Any]], epic_analysis: Dict[str, Any]) -> str:
         """Build prompt for generating technical tasks"""
@@ -12,7 +14,7 @@ class TechnicalTaskPromptBuilder(BasePromptBuilder):
         for story in user_stories:
             description = story.get('description', {})
             formatted_desc = description.get('formatted', '') if isinstance(description, dict) else str(description)
-            
+
             formatted_stories.append({
                 "id": story.get('id', 'Unassigned'),
                 "title": story.get('title', ''),
@@ -162,4 +164,4 @@ class TechnicalTaskPromptBuilder(BasePromptBuilder):
                 f"Technical Domain: {story['technical_domain']}\n"
                 f"Implementation Notes: {story.get('technical_notes', 'None provided')}\n"
             )
-        return "\n".join(formatted_stories) 
+        return "\n".join(formatted_stories)

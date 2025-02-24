@@ -1,9 +1,9 @@
 from .base_interpreter import BaseInterpreter
-from .ticket_interpreter import TicketInterpreter
 from .change_interpreter import ChangeInterpreter
+from .ticket_interpreter import TicketInterpreter
 
 __all__ = [
     'BaseInterpreter',
     'TicketInterpreter',
     'ChangeInterpreter'
-] 
+]

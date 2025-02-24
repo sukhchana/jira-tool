@@ -1,9 +1,11 @@
-from typing import Dict, Any, List
+from typing import Dict, Any
+
 from .base_prompt_builder import BasePromptBuilder
+
 
 class SubtaskPromptBuilder(BasePromptBuilder):
     """Builder for subtask breakdown prompts"""
-    
+
     @staticmethod
     def build_subtasks_prompt(task: Dict[str, Any], epic_details: Dict[str, Any]) -> str:
         """Build prompt for breaking down tasks into subtasks"""
@@ -161,4 +163,4 @@ class SubtaskPromptBuilder(BasePromptBuilder):
         }}
 
         Return ONLY the JSON object, no additional text or explanation.
-        """ 
+        """

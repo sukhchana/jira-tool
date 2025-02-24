@@ -1,12 +1,16 @@
-from typing import Dict, Any, Optional, List
+import re
+from typing import Dict, Any, List
+
 from loguru import logger
-from .base_parser import BaseParser
+
 from models.sub_task import SubTask
 from utils.json_sanitizer import JSONSanitizer
+from .base_parser import BaseParser
+
 
 class SubtaskParser(BaseParser):
     """Parser for subtasks"""
-    
+
     @classmethod
     def parse(cls, content: str) -> List[SubTask]:
         """
@@ -20,13 +24,13 @@ class SubtaskParser(BaseParser):
         """
         try:
             logger.debug(f"Parsing subtask content of length: {len(content)}")
-            
+
             # Parse JSON content
             subtasks_data = JSONSanitizer.safe_parse(content)
             if not isinstance(subtasks_data, list):
                 logger.error("Expected JSON array of subtasks")
                 return [cls._create_error_subtask("Invalid response format - expected JSON array")]
-            
+
             subtasks = []
             for subtask_data in subtasks_data:
                 try:
@@ -53,14 +57,14 @@ class SubtaskParser(BaseParser):
                         parent_id=subtask_data.get("parent_id", "")
                     )
                     subtasks.append(subtask)
-                        
+
                 except Exception as e:
                     logger.error(f"Failed to parse individual subtask: {str(e)}")
                     logger.error(f"Subtask data:\n{subtask_data}")
                     subtasks.append(cls._create_error_subtask(str(e)))
-            
+
             return subtasks if subtasks else [cls._create_error_subtask("No valid subtasks found")]
-            
+
         except Exception as e:
             logger.error(f"Failed to parse subtasks: {str(e)}")
             logger.error(f"Content:\n{content}")
@@ -117,7 +121,7 @@ class SubtaskParser(BaseParser):
         blocks = []
         pattern = r'<code\s+language=["\']([^"\']*)["\']>(.*?)</code>'
         matches = re.finditer(pattern, content, re.DOTALL)
-        
+
         for match in matches:
             language = match.group(1) or "text"
             code = cls._clean_text(match.group(2))
@@ -133,7 +137,7 @@ class SubtaskParser(BaseParser):
         """Clean text by removing markdown and extra whitespace"""
         if not text:
             return text
-        # Remove markdown formatting
+        # Remove Markdown formatting
         text = re.sub(r'\*\*|__|`', '', text)
         # Normalize whitespace
         text = ' '.join(text.split())
@@ -170,14 +174,14 @@ class SubtaskParser(BaseParser):
         """Parse a comma/semicolon separated text into a list of items"""
         if not text:
             return []
-            
+
         # Split by common separators and clean up
         items = [
             cls._clean_text(item.strip())
             for item in re.split(r'[,;]|\band\b', text)
             if item.strip() and item.strip().lower() not in ['none', 'n/a', '-']
         ]
-        
+
         return items
 
     @classmethod
@@ -187,12 +191,12 @@ class SubtaskParser(BaseParser):
         subtasks = re.findall(r'<subtask>.*?</subtask>', content, re.DOTALL)
         if subtasks:
             return subtasks
-            
+
         # If no <subtask> tags found, try to split by numbered items
         subtasks = re.split(r'\n\s*\d+\.\s+', content)
         if len(subtasks) > 1:
             # Remove empty or whitespace-only items
             return [s.strip() for s in subtasks[1:] if s.strip()]
-            
+
         # If no clear separation found, treat as single subtask
-        return [content] if content.strip() else [] 
+        return [content] if content.strip() else []

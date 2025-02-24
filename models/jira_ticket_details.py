@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
+
+from pydantic import BaseModel, Field
+
 
 class JiraTicketDetails(BaseModel):
     """Model representing a JIRA ticket's details"""
@@ -19,4 +21,4 @@ class JiraTicketDetails(BaseModel):
     parent_key: Optional[str] = Field(None, description="Key of the parent ticket (if any)")
     epic_key: Optional[str] = Field(None, description="Key of the epic this ticket belongs to (if any)")
     story_points: Optional[int] = Field(None, description="Story points estimate")
-    custom_fields: Dict[str, Any] = Field(default_factory=dict, description="Any additional custom fields") 
+    custom_fields: Dict[str, Any] = Field(default_factory=dict, description="Any additional custom fields")

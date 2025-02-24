@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Union
+
+from pydantic import BaseModel, Field
+
 
 class HighLevelTask(BaseModel):
     """Model representing a high-level task/story"""
@@ -9,10 +11,10 @@ class HighLevelTask(BaseModel):
     technical_domain: str
     complexity: str
     dependencies: List[str]
-    
+
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to ensure type field is always included"""
         data = super().model_dump(**kwargs)
         if "type" not in data:
             data["type"] = self.type
-        return data 
+        return data

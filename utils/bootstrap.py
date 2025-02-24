@@ -1,7 +1,8 @@
-from pathlib import Path
-from dotenv import load_dotenv
 import os
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Get the project root directory
 project_root = Path(__file__).parent.parent
@@ -24,4 +25,4 @@ required_vars = [
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
     print(f"ERROR: Missing required environment variables: {', '.join(missing_vars)}")
-    sys.exit(1) 
+    sys.exit(1)

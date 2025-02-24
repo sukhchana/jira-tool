@@ -1,21 +1,24 @@
-from typing import Dict, Any, List, Optional
-from loguru import logger
-from .base_parser import BaseParser
 import json
+from typing import Dict, Any, List, Optional
+
+from loguru import logger
+
+from .base_parser import BaseParser
+
 
 class UserStoryParser(BaseParser):
     """Parser for user stories"""
-    
+
     @classmethod
     def parse_from_response(cls, response: str) -> List[Dict[str, Any]]:
         """Extract and parse all user stories from a response"""
         try:
-            # Parse JSON array, handling markdown code blocks
+            # Parse JSON array, handling Markdown code blocks
             stories = cls.parse_json_content(response)
             if not isinstance(stories, list):
                 logger.error("Response is not a JSON array")
                 return [cls._create_error_story("Response is not a JSON array")]
-                
+
             parsed_stories = []
             for i, story in enumerate(stories, 1):
                 try:
@@ -29,10 +32,10 @@ class UserStoryParser(BaseParser):
                     logger.error(f"Failed to parse user story {i}: {str(e)}")
                     parsed_stories.append(cls._create_error_story(f"Failed to parse user story {i}: {str(e)}"))
                     continue
-            
+
             logger.info(f"Successfully parsed {len(parsed_stories)} user stories")
             return parsed_stories
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {str(e)}")
             logger.error(f"Raw response:\n{response}")
@@ -62,7 +65,7 @@ class UserStoryParser(BaseParser):
                     role = parts[0].replace("As a ", "").replace("As an ", "")
                     goal = parts[1].replace("I want ", "")
                     benefit = parts[2].replace("so that ", "")
-                    
+
                     description = {
                         "role": role,
                         "goal": goal,
@@ -98,7 +101,8 @@ class UserStoryParser(BaseParser):
                 "dependencies": story.get("dependencies", []),
                 "acceptance_criteria": story.get("acceptance_criteria", []),
                 "implementation_notes": {
-                    "technical_considerations": story.get("implementation_notes", {}).get("technical_considerations", ""),
+                    "technical_considerations": story.get("implementation_notes", {}).get("technical_considerations",
+                                                                                          ""),
                     "integration_points": story.get("implementation_notes", {}).get("integration_points", ""),
                     "accessibility": story.get("implementation_notes", {}).get("accessibility", "")
                 }
@@ -158,4 +162,4 @@ class UserStoryParser(BaseParser):
                 "integration_points": "",
                 "accessibility": ""
             }
-        } 
+        }

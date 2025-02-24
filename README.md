@@ -1,6 +1,7 @@
 # JIRA Ticket Creator with LLM Support
 
-A FastAPI application that leverages Google's Vertex AI (Gemini) to help create, analyze, and break down JIRA tickets and epics.
+A FastAPI application that leverages Google's Vertex AI (Gemini) to help create, analyze, and break down JIRA tickets
+and epics.
 
 ## Architecture
 
@@ -9,29 +10,30 @@ The application follows a modular, service-oriented architecture:
 ### Core Components
 
 1. **LLM Module** (`llm/`)
-   - `vertexllm.py`: Handles communication with Google's Vertex AI service
-   - Provides a clean interface for LLM operations
+    - `vertexllm.py`: Handles communication with Google's Vertex AI service
+    - Provides a clean interface for LLM operations
 
 2. **Services** (`services/`)
-   - `jira_service.py`: Handles JIRA API interactions
-   - `jira_breakdown_service.py`: Orchestrates epic breakdown and ticket creation
-   - `ticket_parser_service.py`: Parses LLM responses into structured data
+    - `jira_service.py`: Handles JIRA API interactions
+    - `jira_breakdown_service.py`: Orchestrates epic breakdown and ticket creation
+    - `ticket_parser_service.py`: Parses LLM responses into structured data
 
 3. **Prompts** (`prompts/`)
-   - `base_prompt_builder.py`: Base class for all prompt builders
-   - `epic_prompt_builder.py`: Epic analysis and breakdown prompts
-   - `user_story_prompt_builder.py`: User story generation prompts
-   - `technical_task_prompt_builder.py`: Technical task generation prompts
-   - `subtask_prompt_builder.py`: Subtask generation prompts
+    - `base_prompt_builder.py`: Base class for all prompt builders
+    - `epic_prompt_builder.py`: Epic analysis and breakdown prompts
+    - `user_story_prompt_builder.py`: User story generation prompts
+    - `technical_task_prompt_builder.py`: Technical task generation prompts
+    - `subtask_prompt_builder.py`: Subtask generation prompts
 
 4. **Routers** (`routers/`)
-   - `jira_router.py`: JIRA-related endpoints
-   - `llm_router.py`: LLM-related endpoints
+    - `jira_router.py`: JIRA-related endpoints
+    - `llm_router.py`: LLM-related endpoints
 
 5. **Utils** (`utils/`)
-   - `logger.py`: Centralized logging configuration
+    - `logger.py`: Centralized logging configuration
 
 ### Architecture Flow
+
 ```mermaid
 graph TD
     A[Client Request] --> B[FastAPI Router]
@@ -49,6 +51,7 @@ graph TD
 ### Task Generation Flows
 
 #### Subtask Generation Flow
+
 ```mermaid
 sequenceDiagram
     participant Parent Task
@@ -79,6 +82,7 @@ sequenceDiagram
 ```
 
 #### User Story Generation Flow
+
 ```mermaid
 sequenceDiagram
     participant Epic Analysis
@@ -107,6 +111,7 @@ sequenceDiagram
 ```
 
 #### Technical Task Generation Flow
+
 ```mermaid
 sequenceDiagram
     participant User Stories
@@ -134,7 +139,8 @@ sequenceDiagram
     TechnicalTaskGenerator-->>User Stories: Return enriched technical tasks
 ```
 
-These diagrams illustrate the detailed flow of task generation in the system. Each type of task (subtasks, user stories, and technical tasks) follows a similar pattern:
+These diagrams illustrate the detailed flow of task generation in the system. Each type of task (subtasks, user stories,
+and technical tasks) follows a similar pattern:
 
 1. Initial generation of base tasks
 2. Enrichment with additional details through multiple LLM calls
@@ -142,6 +148,7 @@ These diagrams illustrate the detailed flow of task generation in the system. Ea
 4. Combination of all details into the final model
 
 The key differences are in:
+
 - The context used for generation (epic analysis, user stories, etc.)
 - The specific prompts and enrichment steps
 - The final model structure and required fields
@@ -165,17 +172,20 @@ cd jira-ticket-creator
 ```
 
 2. Create and activate a virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 4. Create a `.env` file:
+
 ```env
 # JIRA Settings
 JIRA_API_TOKEN=your_base64_encoded_token
@@ -204,6 +214,7 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
 ## Running the Application
 
 1. Start the application:
+
 ```bash
 python main.py
 ```
@@ -211,55 +222,61 @@ python main.py
 The API will be available at `http://localhost:8000`
 
 2. Access the API documentation:
-   - Swagger UI: `http://localhost:8000/docs`
-   - ReDoc: `http://localhost:8000/redoc`
+    - Swagger UI: `http://localhost:8000/docs`
+    - ReDoc: `http://localhost:8000/redoc`
 
 ## API Endpoints
 
 ### JIRA LLM Operations
 
 - `POST /api/v1/llm/generate-description/`
-  - Generate a structured JIRA ticket description
-  - Request body: `TicketGenerationRequest`
-  - Response: `TicketGenerationResponse`
+    - Generate a structured JIRA ticket description
+    - Request body: `TicketGenerationRequest`
+    - Response: `TicketGenerationResponse`
 
 - `POST /api/v1/llm/analyze-complexity/`
-  - Analyze ticket complexity and estimate story points
-  - Request body: `ComplexityAnalysisRequest`
-  - Response: `ComplexityAnalysisResponse`
+    - Analyze ticket complexity and estimate story points
+    - Request body: `ComplexityAnalysisRequest`
+    - Response: `ComplexityAnalysisResponse`
 
 - `POST /api/v1/llm/break-down-epic/{epic_key}`
-  - Break down a JIRA epic into smaller tasks
-  - Path parameter: `epic_key`
-  - Response: `EpicBreakdownResponse`
+    - Break down a JIRA epic into smaller tasks
+    - Path parameter: `epic_key`
+    - Response: `EpicBreakdownResponse`
 
 - `POST /api/v1/llm/create-epic-subtasks/{epic_key}`
-  - Break down an epic and optionally create subtasks in JIRA
-  - Path parameter: `epic_key`
-  - Query parameter: `create_in_jira` (boolean)
-  - Response: `EpicBreakdownResponse`
+    - Break down an epic and optionally create subtasks in JIRA
+    - Path parameter: `epic_key`
+    - Query parameter: `create_in_jira` (boolean)
+    - Response: `EpicBreakdownResponse`
 
 ## Revision Flow
 
 The application supports a structured workflow for revising execution plans:
 
 ### 1. Request Revision
+
 **Endpoint:** `POST /revise-plan/`
+
 - User submits revision request with:
-  - `execution_id`: Original execution plan ID
-  - `revision_request`: Free-text description of desired changes
+    - `execution_id`: Original execution plan ID
+    - `revision_request`: Free-text description of desired changes
 - System uses LLM to interpret and structure the request
 - Returns a `temp_revision_id` and interpreted changes for confirmation
 
 ### 2. Confirm Interpretation
+
 **Endpoint:** `POST /confirm-revision-request/{temp_revision_id}`
+
 - User reviews the LLM's interpretation
 - Accepts or rejects the interpretation
 - System tracks the decision in SQLite database
 - Status updated to ACCEPTED/REJECTED
 
 ### 3. Apply Changes
+
 **Endpoint:** `POST /apply-revision/{temp_revision_id}`
+
 - Only proceeds if revision was accepted
 - Generates new execution plan with changes
 - Creates new files with updated content
@@ -271,29 +288,31 @@ The system uses SQLite to track executions and revisions:
 
 ```sql
 -- Track execution plans
-CREATE TABLE executions (
-    execution_id TEXT PRIMARY KEY,
-    epic_key TEXT NOT NULL,
-    execution_plan_file TEXT NOT NULL,
-    proposed_plan_file TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
+CREATE TABLE executions
+(
+    execution_id        TEXT PRIMARY KEY,
+    epic_key            TEXT      NOT NULL,
+    execution_plan_file TEXT      NOT NULL,
+    proposed_plan_file  TEXT      NOT NULL,
+    status              TEXT      NOT NULL,
+    created_at          TIMESTAMP NOT NULL,
     parent_execution_id TEXT,
     FOREIGN KEY (parent_execution_id) REFERENCES executions (execution_id)
 );
 
 -- Track revision requests and their status
-CREATE TABLE revisions (
-    revision_id TEXT PRIMARY KEY,
-    execution_id TEXT NOT NULL,
-    proposed_plan_file TEXT NOT NULL,
-    execution_plan_file TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    changes_requested TEXT NOT NULL,
-    changes_interpreted TEXT NOT NULL,
-    accepted BOOLEAN,
-    accepted_at TIMESTAMP,
+CREATE TABLE revisions
+(
+    revision_id         TEXT PRIMARY KEY,
+    execution_id        TEXT      NOT NULL,
+    proposed_plan_file  TEXT      NOT NULL,
+    execution_plan_file TEXT      NOT NULL,
+    status              TEXT      NOT NULL,
+    created_at          TIMESTAMP NOT NULL,
+    changes_requested   TEXT      NOT NULL,
+    changes_interpreted TEXT      NOT NULL,
+    accepted            BOOLEAN,
+    accepted_at         TIMESTAMP,
     FOREIGN KEY (execution_id) REFERENCES executions (execution_id)
 );
 ```
@@ -301,21 +320,23 @@ CREATE TABLE revisions (
 ### File Organization
 
 The system maintains several types of files:
+
 - **Execution Plans**: `execution_plans/EXECUTION_{epic_key}_{timestamp}.md`
-  - Contains the detailed execution plan
-  - Linked to parent plan for revision tracking
+    - Contains the detailed execution plan
+    - Linked to parent plan for revision tracking
 
 - **Proposed Tickets**: `proposed_tickets/PROPOSED_{epic_key}_{timestamp}.yaml`
-  - Contains structured ticket definitions
-  - Maintains consistency with execution plan
+    - Contains structured ticket definitions
+    - Maintains consistency with execution plan
 
 - **Database**: `data/execution_tracker.db`
-  - SQLite database tracking all relationships
-  - Stores execution and revision history
+    - SQLite database tracking all relationships
+    - Stores execution and revision history
 
 ### Revision States
 
 A revision can be in one of these states:
+
 - `PENDING`: Initial state when revision is requested
 - `ACCEPTED`: User confirmed the interpretation
 - `REJECTED`: User rejected the interpretation
@@ -351,6 +372,7 @@ sequenceDiagram
 ## Logging
 
 The application uses Loguru for logging:
+
 - Console output: INFO level and above
 - File output: DEBUG level and above (in `logs/app.log`)
 - Log rotation: 500MB file size
@@ -359,6 +381,7 @@ The application uses Loguru for logging:
 ## Development
 
 ### Project Structure
+
 ```
 ├── llm/
 │   ├── __init__.py
@@ -398,6 +421,7 @@ The application uses Loguru for logging:
 ## Error Handling
 
 The application includes comprehensive error handling:
+
 - HTTP exceptions with detailed error messages
 - Logging of all errors with stack traces
 - Structured error responses
@@ -405,16 +429,16 @@ The application includes comprehensive error handling:
 ## Security Considerations
 
 1. In production:
-   - Replace `allow_origins=["*"]` with specific origins
-   - Secure the API with authentication
-   - Use proper HTTPS certificates
-   - Restrict JIRA API permissions
-   - Implement rate limiting
+    - Replace `allow_origins=["*"]` with specific origins
+    - Secure the API with authentication
+    - Use proper HTTPS certificates
+    - Restrict JIRA API permissions
+    - Implement rate limiting
 
 2. Environment variables:
-   - Never commit `.env` file
-   - Rotate API keys regularly
-   - Use secret management in production
+    - Never commit `.env` file
+    - Rotate API keys regularly
+    - Use secret management in production
 
 ## Contributing
 

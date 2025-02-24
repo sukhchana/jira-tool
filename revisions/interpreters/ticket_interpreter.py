@@ -1,16 +1,19 @@
-from typing import Dict, Any
-from loguru import logger
 import json
+from typing import Dict, Any
+
+from loguru import logger
+
 from .base_interpreter import BaseInterpreter
 from ..models import DateTimeEncoder
 
+
 class TicketInterpreter(BaseInterpreter):
     """Interpreter for ticket revision requests"""
-    
+
     async def interpret_revision_request(
-        self,
-        ticket_data: Dict[str, Any],
-        revision_request: str
+            self,
+            ticket_data: Dict[str, Any],
+            revision_request: str
     ) -> str:
         """Interpret a revision request for a ticket"""
         try:
@@ -41,11 +44,11 @@ class TicketInterpreter(BaseInterpreter):
             [Step by step plan for implementing these changes]
             </interpretation>
             """
-            
+
             return await self.generate_interpretation(prompt)
-            
+
         except Exception as e:
             logger.error(f"Failed to interpret ticket revision request: {str(e)}")
             logger.error(f"Ticket data: {json.dumps(ticket_data, cls=DateTimeEncoder)}")
             logger.error(f"Revision request: {revision_request}")
-            raise 
+            raise

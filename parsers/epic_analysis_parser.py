@@ -1,12 +1,13 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
+
 from loguru import logger
-import xml.etree.ElementTree as ET
-import re
+
 from .base_parser import BaseParser
+
 
 class EpicAnalysisParser(BaseParser):
     """Parser for epic analysis responses"""
-    
+
     SECTIONS = [
         ("main_objective", "main_objective"),
         ("stakeholders", "stakeholders"),
@@ -16,7 +17,7 @@ class EpicAnalysisParser(BaseParser):
         ("challenges", "challenges"),
         ("industry_context", "industry_context")
     ]
-    
+
     @classmethod
     async def parse_with_format_fixing(cls, content: str, format_fixer) -> Dict[str, Any]:
         """Parse epic analysis with format fixing support"""
@@ -52,7 +53,7 @@ class EpicAnalysisParser(BaseParser):
         """Check if epic analysis result is valid"""
         if not result:
             return False
-            
+
         required_fields = ["main_objective", "stakeholders", "core_requirements"]
         return all(
             isinstance(result.get(field), (str, list)) and result.get(field)
@@ -67,7 +68,7 @@ class EpicAnalysisParser(BaseParser):
             analysis_content = cls.extract_between_tags(text, "analysis")
             if not analysis_content:
                 raise ValueError("No content found between <analysis> tags")
-            
+
             sections = {
                 "main_objective": "",
                 "stakeholders": [],
@@ -77,7 +78,7 @@ class EpicAnalysisParser(BaseParser):
                 "challenges": [],
                 "industry_context": []
             }
-            
+
             # Process each section using XML tags
             for section_key, tag_name in cls.SECTIONS:
                 section_content = cls.extract_between_tags(analysis_content, tag_name)
@@ -92,14 +93,14 @@ class EpicAnalysisParser(BaseParser):
                             if item.strip() and not item.strip().startswith(("<", ">"))
                         ]
                         sections[section_key] = [item for item in items if item]
-            
+
             # Parse summary section if present
             summary = cls.extract_between_tags(text, "summary")
             if summary:
                 sections.update(cls._parse_summary(summary))
-            
+
             return sections
-            
+
         except Exception as e:
             logger.error(f"Error parsing epic analysis: {str(e)}")
             logger.error(f"Text that caused error:\n{text}")
@@ -112,22 +113,22 @@ class EpicAnalysisParser(BaseParser):
                 "challenges": [],
                 "industry_context": []
             }
-    
+
     @classmethod
     def _parse_summary(cls, summary_text: str) -> Dict[str, Any]:
         """Parse the summary section with its own XML tags"""
         summary = {}
-        
+
         # Extract numeric fields
-        for field in ["total_technical_domains", "total_core_requirements", 
-                     "total_dependencies", "total_challenges"]:
+        for field in ["total_technical_domains", "total_core_requirements",
+                      "total_dependencies", "total_challenges"]:
             value = cls.extract_between_tags(summary_text, field)
             if value and value.isdigit():
                 summary[field] = int(value)
-        
+
         # Extract research findings
         findings = cls.extract_between_tags(summary_text, "research_findings")
         if findings:
             summary["research_findings"] = findings.strip()
-        
-        return summary 
+
+        return summary

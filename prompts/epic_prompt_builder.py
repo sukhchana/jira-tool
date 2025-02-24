@@ -1,9 +1,11 @@
 from typing import Dict, Any
+
 from .base_prompt_builder import BasePromptBuilder
+
 
 class EpicPromptBuilder(BasePromptBuilder):
     """Builder for epic analysis prompts"""
-    
+
     @staticmethod
     def build_epic_analysis_prompt(summary: str, description: str) -> str:
         """Build prompt for analyzing epic scope"""
@@ -67,12 +69,12 @@ class EpicPromptBuilder(BasePromptBuilder):
         </industry_context>
         </analysis>
         """
-    
+
     @staticmethod
     def build_enhanced_tasks_prompt(
-        epic_analysis: Dict[str, Any],
-        epic_description: str,
-        retry_reason: str
+            epic_analysis: Dict[str, Any],
+            epic_description: str,
+            retry_reason: str
     ) -> str:
         """Build prompt for enhanced task generation after a retry"""
         return f"""
@@ -99,12 +101,12 @@ class EpicPromptBuilder(BasePromptBuilder):
         [List of tasks with clear rationale for each]
         </enhanced_tasks>
         """
-    
+
     @staticmethod
     def build_forced_breakdown_prompt(
-        epic_summary: str,
-        epic_description: str,
-        epic_analysis: Dict[str, Any]
+            epic_summary: str,
+            epic_description: str,
+            epic_analysis: Dict[str, Any]
     ) -> str:
         """Build prompt for forced breakdown when normal flow fails"""
         return f"""
@@ -181,4 +183,4 @@ class EpicPromptBuilder(BasePromptBuilder):
         <tasks>
         [List of user stories and technical tasks in the formats specified above]
         </tasks>
-        """ 
+        """

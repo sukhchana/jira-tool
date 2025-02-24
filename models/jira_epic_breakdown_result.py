@@ -1,6 +1,8 @@
 from typing import List, Dict, Any
-from .epic_breakdown_response import EpicBreakdownResponse
+
 from .analysis_info import AnalysisInfo
+from .epic_breakdown_response import EpicBreakdownResponse
+
 
 class JiraEpicBreakdownResult(EpicBreakdownResponse):
     """Legacy model that inherits from EpicBreakdownResponse for backward compatibility.
@@ -10,4 +12,4 @@ class JiraEpicBreakdownResult(EpicBreakdownResponse):
     """
     # Override tasks to allow raw dict for backward compatibility
     tasks: List[Dict[str, Any]]
-    analysis: AnalysisInfo 
+    analysis: AnalysisInfo

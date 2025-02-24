@@ -1,4 +1,8 @@
-from typing import Dict, Any, List, Union
+import json
+from typing import Dict, Any, Union
+
+from loguru import logger
+
 from models import (
     JiraEpicBreakdownResult,
     BreakdownInfo,
@@ -9,24 +13,23 @@ from models import (
     EpicBreakdownResponse,
     SubTask
 )
-from loguru import logger
-import json
+
 
 class ResponseFormatterService:
     """Service for formatting API responses"""
-    
+
     @staticmethod
     def format_epic_breakdown(result: Union[Dict[str, Any], EpicBreakdownResponse]) -> JiraEpicBreakdownResult:
         """Format epic breakdown response"""
         try:
             logger.debug("Starting to format epic breakdown response")
-            
+
             # Convert EpicBreakdownResponse to dict if needed
             if isinstance(result, EpicBreakdownResponse):
                 result = result.model_dump()
-            
+
             logger.debug(f"Input result keys: {list(result.keys())}")
-            
+
             # Log the raw input for debugging
             try:
                 logger.debug("Raw input data:")
@@ -52,17 +55,17 @@ class ResponseFormatterService:
                     if not isinstance(task, dict):
                         logger.error(f"Task is not a dictionary: {type(task)}")
                         continue
-                        
+
                     # Verify high_level_task exists and has required fields
                     high_level_task = task.get("high_level_task")
                     if not high_level_task:
                         logger.error(f"Task missing high_level_task field: {task}")
                         continue
-                        
+
                     if not isinstance(high_level_task, dict):
                         logger.error(f"high_level_task is not a dictionary: {type(high_level_task)}")
                         continue
-                        
+
                     required_fields = ["type", "title", "complexity"]
                     missing_fields = [f for f in required_fields if f not in high_level_task]
                     if missing_fields:
@@ -84,21 +87,21 @@ class ResponseFormatterService:
                     for key, value in task.items():
                         logger.error(f"  {key}: {type(value)}")
                     raise
-            
+
             if not formatted_tasks:
                 raise ValueError("No valid tasks were processed")
-            
+
             logger.debug(f"Formatted {len(formatted_tasks)} tasks")
-            
+
             # Create execution plan stats
             execution_plan = ExecutionPlanStats(
                 user_stories=len([t for t in formatted_tasks if t["high_level_task"]["type"] == "User Story"]),
                 technical_tasks=len([t for t in formatted_tasks if t["high_level_task"]["type"] == "Technical Task"]),
                 total_subtasks=sum(len(t.get("subtasks", [])) for t in formatted_tasks)
             )
-            
+
             logger.debug("Created execution plan stats")
-            
+
             # Create proposed tickets
             proposed_tickets = ProposedTickets(
                 file=result["proposed_tickets_file"],
@@ -106,13 +109,15 @@ class ResponseFormatterService:
                     "total_tasks": len(formatted_tasks),
                     "total_subtasks": sum(len(t.get("subtasks", [])) for t in formatted_tasks),
                     "task_types": {
-                        "user_stories": len([t for t in formatted_tasks if t["high_level_task"]["type"] == "User Story"]),
-                        "technical_tasks": len([t for t in formatted_tasks if t["high_level_task"]["type"] == "Technical Task"])
+                        "user_stories": len(
+                            [t for t in formatted_tasks if t["high_level_task"]["type"] == "User Story"]),
+                        "technical_tasks": len(
+                            [t for t in formatted_tasks if t["high_level_task"]["type"] == "Technical Task"])
                     }
                 },
                 high_level_tasks=[
                     JiraTaskDefinition(
-                        id=task["high_level_task"].get("id") or f"TASK-{i+1}",
+                        id=task["high_level_task"].get("id") or f"TASK-{i + 1}",
                         type=task["high_level_task"]["type"],
                         title=task["high_level_task"]["title"],
                         complexity=task["high_level_task"]["complexity"]
@@ -124,9 +129,9 @@ class ResponseFormatterService:
                     for task in formatted_tasks
                 }
             )
-            
+
             logger.debug("Created proposed tickets")
-            
+
             # Create final response
             response = JiraEpicBreakdownResult(
                 execution_id=result["execution_id"],
@@ -155,11 +160,12 @@ class ResponseFormatterService:
                         skill
                         for task in formatted_tasks
                         for subtask in task.get("subtasks", [])
-                        for skill in (subtask["required_skills"] if isinstance(subtask, dict) else subtask.required_skills)
+                        for skill in
+                        (subtask["required_skills"] if isinstance(subtask, dict) else subtask.required_skills)
                     )))
                 )
             )
-            
+
             # Verify serialization before returning
             try:
                 logger.debug("Testing response serialization")
@@ -174,13 +180,13 @@ class ResponseFormatterService:
                     except Exception as e:
                         logger.error(f"Field '{key}' is not serializable: {str(e)}")
                         logger.error(f"Type of '{key}': {type(value)}")
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Failed to format epic breakdown response: {str(e)}")
             logger.error(f"Result data structure: {type(result)}")
             logger.error("Available keys in result:")
             for key in result.keys():
                 logger.error(f"- {key}: {type(result[key])}")
-            raise 
+            raise

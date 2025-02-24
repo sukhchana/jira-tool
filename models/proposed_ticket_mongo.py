@@ -1,8 +1,11 @@
-from typing import List, Optional, Dict, Any
-from pydantic import Field
 from datetime import datetime
+from typing import List, Optional, Dict, Any
+
+from pydantic import Field
 from uuid_extensions import uuid7
+
 from .base_model import BaseModel
+
 
 class ProposedTicketMongo(BaseModel):
     """MongoDB model for a proposed ticket"""
@@ -10,7 +13,7 @@ class ProposedTicketMongo(BaseModel):
     ticket_id: str = Field(..., description="ID of the ticket (e.g. USER-STORY-1)")
     ticket_type: str = Field(..., description="Type of ticket: USER_STORY, TECHNICAL_TASK, or SUB_TASK")
     parent_id: Optional[str] = Field(None, description="ID of the parent ticket within the same proposal")
-    
+
     # Common fields
     title: str
     description: str
@@ -20,7 +23,7 @@ class ProposedTicketMongo(BaseModel):
     suggested_assignee: Optional[str] = None
     dependencies: List[str] = Field(default_factory=list)
     implementation_details: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    
+
     # User Story specific fields
     scenarios: Optional[List[dict]] = None
     business_value: Optional[str] = None
@@ -31,11 +34,11 @@ class ProposedTicketMongo(BaseModel):
     accessibility_requirements: Optional[str] = None
     integration_points: Optional[str] = None
     user_experience: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    
+
     # Technical Task specific fields
     modern_practices: Optional[str] = None
     security_considerations: Optional[str] = None
-    
+
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     epic_key: str = Field(..., description="The JIRA epic key this ticket belongs to")
@@ -79,4 +82,4 @@ class ProposedTicketMongo(BaseModel):
                 "epic_key": "DP-7",
                 "execution_id": "01HMW456XYZ..."
             }
-        } 
+        }

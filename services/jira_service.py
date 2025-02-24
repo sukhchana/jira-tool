@@ -1,69 +1,69 @@
-from utils import bootstrap  # This must be the first import
 import aiohttp  # Replace requests with aiohttp
-import os
-from typing import Dict, Any, List, Optional
-from fastapi import HTTPException
-import logging
 import base64
+import os
 import ssl
-from models import TicketCreateResponse, JiraProject
-from models.jira_ticket_details import JiraTicketDetails
-from loguru import logger
-from jira_integration import EpicOperations, TicketOperations  # Updated import path
+from typing import Dict, Any, List, Optional
 
-logger = logging.getLogger(__name__)
+import aiohttp  # Replace requests with aiohttp
+from fastapi import HTTPException
+from loguru import logger
+
+from jira_integration import EpicOperations, TicketOperations  # Updated import path
+from models import JiraProject
+from models.jira_ticket_details import JiraTicketDetails
+
 
 class JiraService:
     """Service for interacting with JIRA"""
-    
+
     def __init__(self):
         """Initialize JIRA operations"""
         self.epic_ops = EpicOperations()
         self.ticket_ops = TicketOperations()
-        
+
         self.base_url = f"{os.getenv('JIRA_SERVER')}/rest/api/2"
-        
+
         self.set_headers_basic()
-        
+
         # Create SSL context that doesn't verify
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
-    
+
     def set_headers(self):
         self.headers = {
             "Authorization": f"Bearer {os.getenv('JIRA_API_TOKEN')}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-    
+
     def set_headers_basic(self):
         # Get credentials from environment
         email = os.getenv('JIRA_EMAIL')
         api_token = os.getenv('JIRA_API_TOKEN')
-        
+
         if not email or not api_token:
             raise ValueError("JIRA_EMAIL and JIRA_API_TOKEN must be set in environment")
-            
+
         # Create base64 encoded auth string
         auth_string = f"{email}:{api_token}"
         encoded_auth = base64.b64encode(auth_string.encode()).decode()
-        
+
         self.headers = {
             "Authorization": f"Basic {encoded_auth}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-    
+
     async def get_ticket(self, ticket_key: str) -> Optional[JiraTicketDetails]:
         """Get a ticket by key"""
         try:
             logger.info(f"Attempting to fetch ticket: {ticket_key}")
-            
+
             # Check if it's an epic based on key format
             is_epic = ticket_key.split("-")[1].startswith("E")
             logger.debug(f"Ticket {ticket_key} is_epic: {is_epic}")
-            
+
             if is_epic:
                 logger.info(f"Fetching epic details for {ticket_key}")
                 ticket_data = await self.epic_ops.get_epic_details(ticket_key)
@@ -73,13 +73,13 @@ class JiraService:
             else:
                 logger.info(f"Fetching regular ticket details for {ticket_key}")
                 ticket_data = await self.ticket_ops.get_ticket_details(ticket_key)
-                
+
             if not ticket_data:
                 logger.warning(f"No data found for ticket {ticket_key}")
                 return None
-                
+
             logger.debug(f"Raw ticket data received: {ticket_data}")
-                
+
             # Convert raw JIRA data to JiraTicketDetails model
             try:
                 ticket_details = JiraTicketDetails(
@@ -110,12 +110,12 @@ class JiraService:
                 logger.error(f"Failed to convert ticket data to JiraTicketDetails: {str(e)}")
                 logger.error(f"Problematic ticket data: {ticket_data}")
                 raise
-                
+
         except Exception as e:
             logger.error(f"Error getting ticket {ticket_key}: {str(e)}")
             logger.exception("Full traceback:")
             return None
-    
+
     async def create_ticket(self, ticket_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new ticket based on type"""
         try:
@@ -124,16 +124,16 @@ class JiraService:
             summary = ticket_data.get("summary")
             description = ticket_data.get("description")
             parent_key = ticket_data.get("parent_key")
-            
+
             if not all([project_key, summary, description]):
                 raise ValueError("Missing required ticket fields")
-            
+
             # Prepare additional fields
             additional_fields = {
                 k: v for k, v in ticket_data.items()
                 if k not in ["project_key", "summary", "description", "issue_type", "parent_key"]
             }
-            
+
             if issue_type == "epic":
                 return await self.epic_ops.create_epic(
                     project_key=project_key,
@@ -169,16 +169,16 @@ class JiraService:
                 )
             else:
                 raise ValueError(f"Unsupported issue type: {issue_type}")
-                
+
         except Exception as e:
             logger.error(f"Failed to create ticket: {str(e)}")
             logger.error(f"Ticket data: {ticket_data}")
             raise
-    
+
     async def update_ticket(
-        self,
-        ticket_key: str,
-        fields: Dict[str, Any]
+            self,
+            ticket_key: str,
+            fields: Dict[str, Any]
     ) -> bool:
         """Update a ticket's fields"""
         try:
@@ -189,11 +189,11 @@ class JiraService:
         except Exception as e:
             logger.error(f"Failed to update ticket: {str(e)}")
             return False
-    
+
     async def update_ticket_status(
-        self,
-        ticket_key: str,
-        status: str
+            self,
+            ticket_key: str,
+            status: str
     ) -> bool:
         """Update a ticket's status"""
         try:
@@ -204,15 +204,15 @@ class JiraService:
         except Exception as e:
             logger.error(f"Failed to update ticket status: {str(e)}")
             return False
-    
+
     async def get_epic_progress(self, epic_key: str) -> Dict[str, Any]:
         """Get progress statistics for an epic"""
         return await self.epic_ops.get_epic_progress(epic_key)
-    
+
     async def get_linked_tickets(
-        self,
-        ticket_key: str,
-        link_type: Optional[str] = None
+            self,
+            ticket_key: str,
+            link_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get tickets linked to the specified ticket"""
         return await self.ticket_ops.get_linked_tickets(ticket_key, link_type)
@@ -221,12 +221,12 @@ class JiraService:
         """Get list of available JIRA projects"""
         try:
             url = f"{self.base_url}/project"
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    url, 
-                    headers=self.headers,
-                    ssl=self.ssl_context
+                        url,
+                        headers=self.headers,
+                        ssl=self.ssl_context
                 ) as response:
                     if response.status == 200:
                         projects = await response.json()
@@ -245,7 +245,7 @@ class JiraService:
                             f"Response: {await response.text()}"
                         )
                         raise HTTPException(status_code=response.status, detail=error_msg)
-                    
+
         except Exception as e:
             logger.error(f"Failed to fetch projects: {str(e)}")
-            raise 
+            raise

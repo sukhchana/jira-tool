@@ -1,9 +1,11 @@
-from typing import Dict, Any, List
+from typing import Dict, Any
+
 from .base_prompt_builder import BasePromptBuilder
+
 
 class UserStoryPromptBuilder(BasePromptBuilder):
     """Builder for user story generation prompts"""
-    
+
     @staticmethod
     def build_user_stories_prompt(epic_analysis: Dict[str, Any]) -> str:
         """Build prompt for generating user stories with Gherkin scenarios"""
@@ -121,4 +123,4 @@ class UserStoryPromptBuilder(BasePromptBuilder):
         5. Accessibility requirements
 
         Return ONLY the JSON array, no additional text or explanation.
-        """ 
+        """

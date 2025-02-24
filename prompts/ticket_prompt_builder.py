@@ -1,29 +1,31 @@
 from typing import Dict, Any, Optional
+
 from .base_prompt_builder import BasePromptBuilder
+
 
 class TicketPromptBuilder(BasePromptBuilder):
     """Builder for individual ticket prompts"""
-    
+
     @staticmethod
     def build_ticket_prompt(
-        context: str,
-        requirements: Optional[str] = None,
-        additional_info: Optional[Dict[str, Any]] = None
+            context: str,
+            requirements: Optional[str] = None,
+            additional_info: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build prompt for ticket description generation"""
         prompt_parts = [
             "Please create a well-structured JIRA ticket with the following information:\n\n",
             f"Context: {context}\n"
         ]
-        
+
         if requirements:
             prompt_parts.append(f"Requirements: {requirements}\n")
-            
+
         if additional_info:
             prompt_parts.append("Additional Information:\n")
             for key, value in additional_info.items():
                 prompt_parts.append(f"- {key}: {value}\n")
-                
+
         prompt_parts.append("""
 Please format the response using EXACTLY this structure:
 
@@ -64,9 +66,9 @@ Requirements:
 - Required skills should be specific technologies/frameworks
 - Technical notes should include implementation guidance
 """)
-        
+
         return "".join(prompt_parts)
-    
+
     @staticmethod
     def build_complexity_prompt(ticket_description: str) -> str:
         """Build prompt for ticket complexity analysis"""
@@ -79,4 +81,4 @@ Requirements:
         
         Ticket Description:
         {ticket_description}
-        """ 
+        """

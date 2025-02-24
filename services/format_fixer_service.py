@@ -1,13 +1,13 @@
 from typing import Dict, Any, Optional
+
 from loguru import logger
-from prompts.epic_prompt_builder import EpicPromptBuilder
-from prompts.user_story_prompt_builder import UserStoryPromptBuilder
-from prompts.technical_task_prompt_builder import TechnicalTaskPromptBuilder
+
 from parsers import EpicAnalysisParser, UserStoryParser, TechnicalTaskParser
+
 
 class FormatFixerService:
     """Service for fixing formatting issues in LLM responses"""
-    
+
     def __init__(self, llm_service):
         """Initialize with LLM service for reformatting"""
         self.llm_service = llm_service
@@ -235,4 +235,4 @@ class FormatFixerService:
         }
 
         fields = required_fields.get(content_type, [])
-        return all(field in result for field in fields) 
+        return all(field in result for field in fields)

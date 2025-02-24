@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
 from typing import List
+
+from pydantic import BaseModel, Field
+
 
 class SubTask(BaseModel):
     """Model representing a JIRA subtask"""
@@ -13,4 +15,4 @@ class SubTask(BaseModel):
     suggested_assignee: str = Field(..., description="Role best suited for this task")
     dependencies: List[str] = Field(default_factory=list, description="List of dependencies")
     acceptance_criteria: List[str] = Field(..., description="List of acceptance criteria")
-    parent_id: str = Field(..., description="ID of the parent task") 
+    parent_id: str = Field(..., description="ID of the parent task")

@@ -1,29 +1,31 @@
-from typing import Any, List, Union, Tuple, Dict, Optional
-from loguru import logger
-from breakdown.breakdown_summary_logger import log_completion_summary
-from models.jira_task_definition import JiraTaskDefinition
-from services.jira_service import JiraService
-from services.execution_log_service import ExecutionLogService
-from services.task_tracker import TaskTracker
-from services.proposed_tickets_service import ProposedTicketsService
-from .epic_analyzer import EpicAnalyzer
-from .user_story_generator import UserStoryGenerator
-from .technical_task_generator import TechnicalTaskGenerator
-from .subtask_generator import SubtaskGenerator
-from models.user_story import UserStory
-from models.technical_task import TechnicalTask
-from models.sub_task import SubTask
-from models.analysis_info import AnalysisInfo
-from models.jira_ticket_details import JiraTicketDetails
-from models.epic_breakdown_response import EpicBreakdownResponse
-from models.breakdown_info import BreakdownInfo
-from models.metrics_info import MetricsInfo
-from models.execution_plan_stats import ExecutionPlanStats
-from models.proposed_tickets import ProposedTickets
-from models.task_group import TaskGroup
-from uuid_extensions import uuid7
 import json
 from pathlib import Path
+from typing import Any, List, Union, Tuple
+
+from loguru import logger
+from uuid_extensions import uuid7
+
+from breakdown.breakdown_summary_logger import log_completion_summary
+from models.analysis_info import AnalysisInfo
+from models.breakdown_info import BreakdownInfo
+from models.epic_breakdown_response import EpicBreakdownResponse
+from models.execution_plan_stats import ExecutionPlanStats
+from models.jira_task_definition import JiraTaskDefinition
+from models.jira_ticket_details import JiraTicketDetails
+from models.metrics_info import MetricsInfo
+from models.proposed_tickets import ProposedTickets
+from models.sub_task import SubTask
+from models.technical_task import TechnicalTask
+from models.user_story import UserStory
+from services.execution_log_service import ExecutionLogService
+from services.jira_service import JiraService
+from services.proposed_tickets_service import ProposedTicketsService
+from services.task_tracker import TaskTracker
+from .epic_analyzer import EpicAnalyzer
+from .subtask_generator import SubtaskGenerator
+from .technical_task_generator import TechnicalTaskGenerator
+from .user_story_generator import UserStoryGenerator
+
 
 class ExecutionManager:
     """
@@ -45,7 +47,7 @@ class ExecutionManager:
         execution_id (str): Unique identifier for this execution
         state_dir (Path): Directory where execution state files are stored
     """
-    
+
     def __init__(self, epic_key: str):
         """
         Initialize the execution manager with required dependencies.
@@ -57,20 +59,20 @@ class ExecutionManager:
         self.execution_id = str(uuid7())
         self.state_dir = Path(f"execution_states/{self.epic_key}/{self.execution_id}")
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize services
         self.execution_log = ExecutionLogService(epic_key)
         self.proposed_tickets = ProposedTicketsService(epic_key=epic_key, execution_id=self.execution_id)
         self.jira = JiraService()
-        
+
         # Initialize breakdown components
         self.epic_analyzer = EpicAnalyzer(self.execution_log)
         self.user_story_generator = UserStoryGenerator(self.execution_log)
         self.technical_task_generator = TechnicalTaskGenerator(self.execution_log)
         self.subtask_generator = SubtaskGenerator(self.execution_log)
-        
+
         logger.info(f"Initialized ExecutionManager for epic {epic_key}")
-    
+
     async def analyze_epic_details(self) -> Tuple[JiraTicketDetails, AnalysisInfo]:
         """
         Retrieve epic details from JIRA and perform initial analysis.
@@ -92,21 +94,21 @@ class ExecutionManager:
         epic_details = await self.jira.get_ticket(self.epic_key)
         if not epic_details:
             raise ValueError(f"Epic {self.epic_key} not found")
-        
+
         epic_analysis = await self.epic_analyzer.analyze_epic(
             epic_details.summary,
             epic_details.description
         )
-        
+
         self._save_state("epic_details.json", epic_details.model_dump())
         self._save_state("epic_analysis.json", epic_analysis.model_dump())
-        
+
         return epic_details, epic_analysis
 
     async def generate_user_stories(
-        self,
-        epic_analysis: AnalysisInfo,
-        task_tracker: TaskTracker
+            self,
+            epic_analysis: AnalysisInfo,
+            task_tracker: TaskTracker
     ) -> List[UserStory]:
         """
         Generate user stories based on epic analysis.
@@ -130,15 +132,15 @@ class ExecutionManager:
             task_tracker,
             self.proposed_tickets
         )
-        
+
         self._save_state("user_stories.json", [story.model_dump() for story in user_stories])
         return user_stories
 
     async def generate_technical_tasks(
-        self,
-        user_stories: List[UserStory],
-        epic_analysis: AnalysisInfo,
-        task_tracker: TaskTracker
+            self,
+            user_stories: List[UserStory],
+            epic_analysis: AnalysisInfo,
+            task_tracker: TaskTracker
     ) -> List[TechnicalTask]:
         """
         Generate technical tasks based on user stories and epic analysis.
@@ -164,16 +166,16 @@ class ExecutionManager:
             task_tracker,
             self.proposed_tickets
         )
-        
+
         self._save_state("technical_tasks.json", [task.model_dump() for task in technical_tasks])
         return technical_tasks
 
     async def generate_subtasks(
-        self,
-        high_level_tasks: List[Union[UserStory, TechnicalTask]],
-        epic_details: JiraTicketDetails,
-        task_tracker: TaskTracker,
-        task_type: str
+            self,
+            high_level_tasks: List[Union[UserStory, TechnicalTask]],
+            epic_details: JiraTicketDetails,
+            task_tracker: TaskTracker,
+            task_type: str
     ) -> List[SubTask]:
         """
         Break down high-level tasks into detailed subtasks.
@@ -200,7 +202,7 @@ class ExecutionManager:
             task_tracker,
             self.proposed_tickets
         )
-        
+
         self._save_state(f"{task_type}_subtasks.json", [subtask.model_dump() for subtask in subtasks])
         return subtasks
 
@@ -244,10 +246,10 @@ class ExecutionManager:
 
     @classmethod
     def load_execution_state(
-        cls,
-        epic_key: str,
-        execution_id: str,
-        state_file: str
+            cls,
+            epic_key: str,
+            execution_id: str,
+            state_file: str
     ) -> Any:
         """
         Load a specific execution state file from a previous execution.
@@ -293,21 +295,21 @@ class ExecutionManager:
             Exception: For any other errors during execution
         """
         task_tracker = TaskTracker(self.epic_key)
-        
+
         try:
             logger.info(f"Starting breakdown for epic: {self.epic_key}")
-            
+
             # Get epic details and analysis
             epic_details, epic_analysis = await self.analyze_epic_details()
-            
+
             try:
                 # Generate high-level tasks
                 all_tasks: List[Union[UserStory, TechnicalTask]] = []
-                
+
                 # Generate user stories
                 user_stories = await self.generate_user_stories(epic_analysis, task_tracker)
                 all_tasks.extend(user_stories)
-                
+
                 # Generate subtasks for user stories
                 user_story_subtasks = await self.generate_subtasks(
                     user_stories,
@@ -315,7 +317,7 @@ class ExecutionManager:
                     task_tracker,
                     "user_story"
                 )
-                
+
                 # Generate technical tasks
                 technical_tasks = await self.generate_technical_tasks(
                     user_stories,
@@ -323,7 +325,7 @@ class ExecutionManager:
                     task_tracker
                 )
                 all_tasks.extend(technical_tasks)
-                
+
                 # Generate subtasks for technical tasks
                 technical_task_subtasks = await self.generate_subtasks(
                     technical_tasks,
@@ -331,16 +333,16 @@ class ExecutionManager:
                     task_tracker,
                     "technical_task"
                 )
-                
+
                 # Combine all subtasks
                 all_subtasks = user_story_subtasks + technical_task_subtasks
-                
+
                 # Log completion summary
                 log_completion_summary(task_tracker, self.execution_log)
-                
+
                 # Save final state
                 self.proposed_tickets.save()
-                
+
                 # Save execution record
                 await self.execution_log.create_execution_record(
                     execution_id=self.execution_id,
@@ -349,7 +351,7 @@ class ExecutionManager:
                     proposed_plan_file=self.proposed_tickets.filename,
                     status="SUCCESS"
                 )
-                
+
                 response = EpicBreakdownResponse(
                     execution_id=self.execution_id,
                     epic_key=self.epic_key,
@@ -388,7 +390,8 @@ class ExecutionManager:
                     ),
                     metrics=MetricsInfo(
                         total_story_points=sum(subtask.story_points for subtask in all_subtasks),
-                        estimated_days=sum(subtask.story_points for subtask in all_subtasks) / 5,  # Assuming 5 points per day
+                        estimated_days=sum(subtask.story_points for subtask in all_subtasks) / 5,
+                        # Assuming 5 points per day
                         required_skills=list(set(
                             skill
                             for subtask in all_subtasks
@@ -410,20 +413,20 @@ class ExecutionManager:
                 except Exception as e:
                     logger.error(f"Error saving final result: {str(e)}")
                 return response
-                
+
             except Exception as e:
                 self._handle_task_generation_error(e, task_tracker, epic_analysis)
                 raise
-                
+
         except Exception as e:
             self._handle_fatal_error(e)
             raise
 
     async def test_subtask_generation(
-        self,
-        epic_key: str,
-        execution_id: str,
-        task_type: str = "user_story"
+            self,
+            epic_key: str,
+            execution_id: str,
+            task_type: str = "user_story"
     ) -> List[SubTask]:
         """
         Test the subtask generation process using saved state.
@@ -447,19 +450,19 @@ class ExecutionManager:
             # Load required states
             epic_details_data = self.load_execution_state(epic_key, execution_id, "epic_details.json")
             epic_details = JiraTicketDetails(**epic_details_data)
-            
+
             tasks_file = f"{task_type}s.json" if task_type == "user_story" else "technical_tasks.json"
             tasks_data = self.load_execution_state(epic_key, execution_id, tasks_file)
-            
+
             # Convert loaded data back to models
             high_level_tasks = [
                 UserStory(**task) if task_type == "user_story" else TechnicalTask(**task)
                 for task in tasks_data
             ]
-            
+
             # Create new task tracker for testing
             task_tracker = TaskTracker(epic_key)
-            
+
             # Generate and return subtasks
             return await self.generate_subtasks(
                 high_level_tasks,
@@ -467,16 +470,16 @@ class ExecutionManager:
                 task_tracker,
                 task_type
             )
-            
+
         except Exception as e:
             logger.error(f"Error in test_subtask_generation: {str(e)}")
             raise
 
     def _handle_task_generation_error(
-        self,
-        error: Exception,
-        task_tracker: TaskTracker,
-        epic_analysis: AnalysisInfo
+            self,
+            error: Exception,
+            task_tracker: TaskTracker,
+            epic_analysis: AnalysisInfo
     ) -> None:
         """
         Handle errors that occur during task generation.
@@ -492,7 +495,7 @@ class ExecutionManager:
         error_summary = task_tracker.get_summary()
         error_summary["errors"] = [str(error)]
         self.execution_log.log_summary(error_summary)
-        
+
         self._save_state("error_state.json", {
             "error": str(error),
             "task_tracker_summary": error_summary,
@@ -510,4 +513,4 @@ class ExecutionManager:
             error: The fatal exception that occurred
         """
         self.execution_log.log_section("Fatal Error", str(error))
-        self._save_state("fatal_error.json", {"error": str(error)}) 
+        self._save_state("fatal_error.json", {"error": str(error)})

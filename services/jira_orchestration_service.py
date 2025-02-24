@@ -1,9 +1,12 @@
-from typing import Dict, Any, List
-from fastapi import HTTPException
-from services.jira_service import JiraService
-from loguru import logger
-from datetime import datetime
 import os
+from datetime import datetime
+from typing import Dict, Any, List
+
+from fastapi import HTTPException
+from loguru import logger
+
+from services.jira_service import JiraService
+
 
 class JiraOrchestrationService:
     """
@@ -23,9 +26,9 @@ class JiraOrchestrationService:
         logger.info("Successfully initialized JiraOrchestrationService")
 
     async def create_epic_breakdown_structure(
-        self,
-        epic_key: str,
-        breakdown: Dict[str, Any]
+            self,
+            epic_key: str,
+            breakdown: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
         Create a complete JIRA ticket hierarchy from an epic breakdown.
@@ -84,14 +87,14 @@ class JiraOrchestrationService:
             )
 
     async def _create_story(
-        self,
-        project_key: str,
-        epic_key: str,
-        task: Dict[str, Any]
+            self,
+            project_key: str,
+            epic_key: str,
+            task: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Create a story-level ticket linked to an epic"""
         logger.debug(f"Creating story from task: {task['title']}")
-        
+
         story = await self.jira_service.create_ticket(
             project_key=project_key,
             summary=task["title"],
@@ -100,15 +103,15 @@ class JiraOrchestrationService:
             labels=[task["technical_domain"], f"complexity-{task['complexity'].lower()}"],
             parent_key=epic_key
         )
-        
+
         logger.debug(f"Created story {story['key']}")
         return story
 
     async def _create_subtasks(
-        self,
-        project_key: str,
-        story_key: str,
-        subtasks: List[Dict[str, Any]]
+            self,
+            project_key: str,
+            story_key: str,
+            subtasks: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Create subtasks linked to a story"""
         logger.debug(f"Creating {len(subtasks)} subtasks for story {story_key}")
@@ -150,9 +153,9 @@ class JiraOrchestrationService:
         )
 
     async def create_execution_plan(
-        self,
-        epic_key: str,
-        breakdown: Dict[str, Any]
+            self,
+            epic_key: str,
+            breakdown: Dict[str, Any]
     ) -> str:
         """
         Generate a markdown execution plan for the epic breakdown.
@@ -171,21 +174,21 @@ class JiraOrchestrationService:
         """
         try:
             logger.info(f"Generating execution plan for epic {epic_key}")
-            
+
             # Create execution plans directory if it doesn't exist
             os.makedirs("execution_plans", exist_ok=True)
-            
+
             # Generate filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"execution_plans/EXECUTION_{epic_key}_{timestamp}.md"
-            
+
             # Build the markdown content
             content = self._generate_execution_plan_content(epic_key, breakdown)
-            
+
             # Write to file
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(content)
-            
+
             logger.success(f"Successfully generated execution plan: {filename}")
             return filename
 
@@ -197,12 +200,12 @@ class JiraOrchestrationService:
             )
 
     def _generate_execution_plan_content(
-        self,
-        epic_key: str,
-        breakdown: Dict[str, Any]
+            self,
+            epic_key: str,
+            breakdown: Dict[str, Any]
     ) -> str:
         """Generate the markdown content for the execution plan"""
-        
+
         lines = [
             f"# Execution Plan for Epic {epic_key}",
             "",
@@ -221,7 +224,7 @@ class JiraOrchestrationService:
 
         total_stories = len(breakdown["tasks"])
         total_subtasks = sum(len(task_group["subtasks"]) for task_group in breakdown["tasks"])
-        
+
         lines.extend([
             "### Summary",
             f"- Total Stories to create: {total_stories}",
@@ -285,7 +288,7 @@ class JiraOrchestrationService:
         return "\n".join(lines)
 
     def _format_dict_as_markdown(self, d: Dict[str, Any]) -> str:
-        """Format a dictionary as markdown list items"""
+        """Format a dictionary as Markdown list items"""
         lines = []
         for key, value in d.items():
             formatted_key = key.replace("_", " ").title()
@@ -296,4 +299,4 @@ class JiraOrchestrationService:
                 lines.append(f"### {formatted_key}")
                 lines.append(str(value))
             lines.append("")
-        return "\n".join(lines) 
+        return "\n".join(lines)
