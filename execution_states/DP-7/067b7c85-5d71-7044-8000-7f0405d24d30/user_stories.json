@@ -1,0 +1,796 @@
+[
+  {
+    "id": "USER-STORY-1",
+    "title": "User Story - Configure PingFederate for OpenID Connect",
+    "type": "User Story",
+    "description": {
+      "role": "PingFederate Administrator",
+      "goal": "Configure PingFederate to act as an OpenID Connect provider, mapping Active Directory attributes to OIDC claims.",
+      "benefit": "Enables the application to retrieve user details from Active Directory via OpenID Connect, facilitating secure authentication and authorization.",
+      "formatted": "As a PingFederate Administrator, I want to configure PingFederate to act as an OpenID Connect provider, mapping Active Directory attributes to OIDC claims, so that the application can retrieve user details from Active Directory via OpenID Connect, facilitating secure authentication and authorization."
+    },
+    "technical_domain": "OpenID Connect Integration",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "PingFederate Administration",
+      "Active Directory",
+      "OpenID Connect"
+    ],
+    "suggested_assignee": "PingFederate Administrator",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Current pain points addressed by this story include: * Manual User Provisioning & Management: Without OIDC, applications might rely on separate user stores, leading to duplicated effort in user provisioning, deprovisioning, and attribute updates. This increases administrative overhead and the risk of inconsistencies. * Security Risks of Custom Authentication: Applications implementing their own authentication mechanisms are prone to security vulnerabilities. OIDC leverages a standardized and secure protocol, reducing the attack surface. * Complex Application Integration: Integrating applications with Active Directory directly can be complex and require deep knowledge of AD's internal structure and protocols (e.g., LDAP). OIDC simplifies integration by providing a standardized API. * Lack of Single Sign-On (SSO): Without OIDC, users may need to authenticate separately for each application, leading to a poor user experience and increased password fatigue. * Compliance Challenges: Meeting regulatory requirements (e.g., GDPR, HIPAA) can be difficult without a centralized and auditable authentication and authorization system. OIDC provides a framework for managing user consent and data access. * Inconsistent User Experience: Different applications may implement authentication and authorization differently, leading to an inconsistent user experience. * Difficulty in Auditing and Monitoring: Without a centralized authentication system, it can be difficult to track user activity and identify potential security threats. * Vendor Lock-in: Relying on proprietary authentication solutions can lead to vendor lock-in. OIDC is an open standard, providing greater flexibility and interoperability.",
+      "success_metrics": "Specific, measurable metrics to evaluate the success of this story: * Successful Authentication Rate: Percentage of users who can successfully authenticate via OIDC. * Time to Authenticate: Average time taken for a user to authenticate via OIDC. * Number of Support Tickets Related to Authentication: Track the number of support tickets related to authentication issues after the implementation. * Application Onboarding Time: Measure the time it takes to onboard new applications to the OIDC provider. * Security Audit Compliance: Verify that the OIDC implementation meets security audit requirements. * User Satisfaction: Measure user satisfaction with the authentication process through surveys or feedback forms. * Claim Accuracy: Verify that the correct Active Directory attributes are being mapped to the correct OIDC claims. * System Performance: Monitor PingFederate's performance (CPU usage, memory usage, response times) to ensure it can handle the OIDC workload. * Number of Applications Integrated: Track the number of applications that are successfully integrated with the PingFederate OIDC provider. * Error Rate: Measure the rate of errors during the authentication process.",
+      "similar_implementations": "Examples of similar implementations, tools, or references that can guide this implementation: * PingFederate Documentation: The official PingFederate documentation provides detailed instructions on configuring PingFederate as an OIDC provider. * ForgeRock OpenAM: ForgeRock OpenAM is another popular open-source identity and access management (IAM) solution that can be configured as an OIDC provider. * Keycloak: Keycloak is an open-source IAM solution that offers OIDC support and is often used in cloud-native environments. * Okta: Okta is a cloud-based IAM provider that offers OIDC support and integrates with various applications and identity sources. * Auth0: Auth0 is another cloud-based IAM provider that offers OIDC support and provides a developer-friendly platform. * Azure Active Directory (Azure AD): Azure AD can act as an OIDC provider, allowing applications to authenticate users stored in Azure AD. * AWS Cognito: AWS Cognito is a cloud-based identity provider that offers OIDC support and integrates with AWS services. * OpenID Connect Specifications: The official OpenID Connect specifications provide a detailed overview of the OIDC protocol. * NIST Special Publication 800-63: NIST SP 800-63 provides guidelines for digital identity management, including recommendations for OIDC implementations. * Ping Identity's PingCentral: PingCentral can help manage and orchestrate PingFederate configurations, including OIDC setups. * Community Forums and Blogs: Online forums and blogs dedicated to PingFederate and OIDC can provide valuable insights and troubleshooting tips.",
+      "modern_approaches": "Current (2024-2025) best practices, patterns, and modern approaches relevant to this story: * Infrastructure as Code (IaC): Use IaC tools like Terraform or Ansible to automate the configuration of PingFederate and its OIDC settings. This ensures consistency and repeatability. * Containerization and Orchestration: Deploy PingFederate in containers (e.g., Docker) and orchestrate them using Kubernetes for scalability and resilience. * Zero Trust Architecture: Implement a Zero Trust architecture by verifying every user and device before granting access to resources. OIDC plays a crucial role in this architecture by providing a secure authentication mechanism. * Dynamic Client Registration: Implement dynamic client registration to allow applications to register themselves with the OIDC provider automatically. * Federated Identity Management: Integrate PingFederate with other identity providers to support federated identity management scenarios. * Risk-Based Authentication (RBA): Implement RBA to dynamically adjust the authentication requirements based on the user's risk profile. * Continuous Integration and Continuous Delivery (CI/CD): Use CI/CD pipelines to automate the deployment and testing of PingFederate configurations. * API Security: Secure the PingFederate APIs using OAuth 2.0 and other security best practices. * Monitoring and Logging: Implement comprehensive monitoring and logging to track user activity and identify potential security threats. Use tools like Splunk or ELK stack for log analysis. * Consent Management: Implement a consent management system to allow users to control which attributes are shared with applications. * Standards Compliance: Ensure that the OIDC implementation complies with the latest OIDC specifications and security best practices. * Attribute Aggregation: Use attribute aggregation to combine attributes from multiple sources (e.g., Active Directory, databases) into a single set of claims. * Proof Key for Code Exchange (PKCE): Implement PKCE for native and mobile applications to prevent authorization code interception attacks. * JWT Best Practices: Follow best practices for generating and validating JSON Web Tokens (JWTs), including using strong encryption algorithms and verifying the token signature."
+    },
+    "code_blocks": [
+      {
+        "language": "xml",
+        "description": "Example PingFederate OpenID Connect Policy Configuration (Illustrative - actual configuration is done via the PingFederate Admin Console)",
+        "code": "<!-- Example OpenID Connect Policy Configuration (Illustrative) -->\n<Policy>\n  <PolicyId>ad-oidc-policy</PolicyId>\n  <Description>Policy for mapping AD attributes to OIDC claims.</Description>\n  <AttributeSources>\n    <AttributeSource>\n      <Id>activeDirectory</Id>\n      <Type>LDAP</Type>\n      <Configuration>\n        <Host>ad.example.com</Host>\n        <Port>389</Port>\n        <BaseDN>DC=example,DC=com</BaseDN>\n        <UserFilter>(sAMAccountName=${subject.username})</UserFilter>\n        <Attributes>\n          <Attribute>\n            <Name>userPrincipalName</Name>\n            <TargetClaim>email</TargetClaim>\n          </Attribute>\n          <Attribute>\n            <Name>givenName</Name>\n            <TargetClaim>given_name</TargetClaim>\n          </Attribute>\n          <Attribute>\n            <Name>sn</Name>\n            <TargetClaim>family_name</TargetClaim>\n          </Attribute>\n          <Attribute>\n            <Name>displayName</Name>\n            <TargetClaim>name</TargetClaim>\n          </Attribute>\n          <Attribute>\n            <Name>objectGUID</Name>\n            <TargetClaim>sub</TargetClaim>\n            <Transformation>UUID</Transformation>\n          </Attribute>\n        </Attributes>\n      </Configuration>\n    </AttributeSource>\n  </AttributeSources>\n  <ClaimMappings>\n    <ClaimMapping>\n      <SourceAttribute>activeDirectory.email</SourceAttribute>\n      <TargetClaim>email</TargetClaim>\n    </ClaimMapping>\n    <ClaimMapping>\n      <SourceAttribute>activeDirectory.given_name</SourceAttribute>\n      <TargetClaim>given_name</TargetClaim>\n    </ClaimMapping>\n    <ClaimMapping>\n      <SourceAttribute>activeDirectory.family_name</SourceAttribute>\n      <TargetClaim>family_name</TargetClaim>\n    </ClaimMapping>\n    <ClaimMapping>\n      <SourceAttribute>activeDirectory.name</SourceAttribute>\n      <TargetClaim>name</TargetClaim>\n    </ClaimMapping>\n    <ClaimMapping>\n      <SourceAttribute>activeDirectory.sub</SourceAttribute>\n      <TargetClaim>sub</TargetClaim>\n    </ClaimMapping>\n  </ClaimMappings>\n</Policy>"
+      },
+      {
+        "language": "python",
+        "description": "Python code to test OpenID Connect authentication and retrieve user claims.  Demonstrates integration point with a client application.",
+        "code": "import requests\nfrom requests_oauthlib import OAuth2Session\n\n# Configuration\nclient_id = 'YOUR_CLIENT_ID'\nclient_secret = 'YOUR_CLIENT_SECRET'\nauthorization_base_url = 'https://your.pingfederate.com:9031/as/authorization.oauth2'\ntoken_url = 'https://your.pingfederate.com:9031/as/token.oauth2'\nredirect_uri = 'http://localhost:5000/callback'\nscope = ['openid', 'profile', 'email']\n\n# Create OAuth2 session\noauth = OAuth2Session(client_id, redirect_uri=redirect_uri, scope=scope)\n\n# Get authorization URL\nauthorization_url, state = oauth.authorization_url(authorization_base_url)\n\nprint(f'Please visit this URL to authorize: {authorization_url}')\n\n# After authorization, the user will be redirected to the redirect_uri\n# Capture the authorization code from the redirect_uri\nauthorization_response = input('Enter the full callback URL: ')\n\n# Fetch the access token\ntry:\n    token = oauth.fetch_token(token_url, client_secret=client_secret, authorization_response=authorization_response)\n    print(f'Access Token: {token}')\nexcept Exception as e:\n    print(f'Error fetching token: {e}')\n    exit()\n\n# Fetch user info (claims)\nuserinfo_url = 'https://your.pingfederate.com:9031/idp/userinfo.openid'\n\ntry:\n    userinfo_response = oauth.get(userinfo_url)\n    userinfo_response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)\n    userinfo = userinfo_response.json()\n    print(f'User Info: {userinfo}')\nexcept requests.exceptions.RequestException as e:\n    print(f'Error fetching user info: {e}')\nexcept ValueError as e:\n    print(f'Error parsing JSON response: {e}')"
+      },
+      {
+        "language": "java",
+        "description": "Java code snippet demonstrating error handling during LDAP attribute retrieval (simulated).",
+        "code": "import java.util.HashMap;\nimport java.util.Map;\n\npublic class LDAPAttributeRetriever {\n\n    public Map<String, String> retrieveAttributes(String username) {\n        Map<String, String> attributes = new HashMap<>();\n        try {\n            // Simulate LDAP lookup\n            if (username == null || username.isEmpty()) {\n                throw new IllegalArgumentException(\"Username cannot be null or empty.\");\n            }\n\n            if (username.equals(\"testuser\")) {\n                attributes.put(\"email\", \"testuser@example.com\");\n                attributes.put(\"displayName\", \"Test User\");\n            } else {\n                // Simulate user not found\n                throw new UserNotFoundException(\"User not found in LDAP.\");\n            }\n\n        } catch (IllegalArgumentException e) {\n            System.err.println(\"Invalid input: \" + e.getMessage());\n            // Log the error, potentially return a default set of attributes or an error code\n            return null; // Or throw the exception if appropriate\n        } catch (UserNotFoundException e) {\n            System.err.println(\"User lookup failed: \" + e.getMessage());\n            // Log the error, potentially return a default set of attributes or an error code\n            return null; // Or throw the exception if appropriate\n        } catch (Exception e) {\n            System.err.println(\"Unexpected error during LDAP retrieval: \" + e.getMessage());\n            // Log the error, potentially return a default set of attributes or an error code\n            return null; // Or throw the exception if appropriate\n        }\n        return attributes;\n    }\n\n    static class UserNotFoundException extends Exception {\n        public UserNotFoundException(String message) {\n            super(message);\n        }\n    }\n\n    public static void main(String[] args) {\n        LDAPAttributeRetriever retriever = new LDAPAttributeRetriever();\n        Map<String, String> userAttributes = retriever.retrieveAttributes(\"testuser\");\n        if (userAttributes != null) {\n            System.out.println(\"User Attributes: \" + userAttributes);\n        } else {\n            System.out.println(\"Failed to retrieve user attributes.\");\n        }\n\n        userAttributes = retriever.retrieveAttributes(null);\n        if (userAttributes != null) {\n            System.out.println(\"User Attributes: \" + userAttributes);\n        } else {\n            System.out.println(\"Failed to retrieve user attributes.\");\n        }\n    }\n}"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful OpenID Connect Configuration and Claim Retrieval",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "PingFederate is installed and running"
+          },
+          {
+            "keyword": "And",
+            "text": "Active Directory is configured and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "A test client application is registered in PingFederate"
+          },
+          {
+            "keyword": "When",
+            "text": "I configure PingFederate as an OpenID Connect provider"
+          },
+          {
+            "keyword": "And",
+            "text": "I map Active Directory 'sAMAccountName' attribute to the 'sub' claim"
+          },
+          {
+            "keyword": "And",
+            "text": "I map Active Directory 'displayName' attribute to the 'name' claim"
+          },
+          {
+            "keyword": "And",
+            "text": "I map Active Directory 'mail' attribute to the 'email' claim"
+          },
+          {
+            "keyword": "And",
+            "text": "I initiate an OpenID Connect authentication flow from the test client"
+          },
+          {
+            "keyword": "Then",
+            "text": "The test client successfully authenticates with PingFederate"
+          },
+          {
+            "keyword": "And",
+            "text": "The test client receives an ID token containing the 'sub', 'name', and 'email' claims with values from Active Directory"
+          }
+        ]
+      },
+      {
+        "name": "Invalid Active Directory Attribute Mapping",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "PingFederate is configured as an OpenID Connect provider"
+          },
+          {
+            "keyword": "And",
+            "text": "A test client application is registered in PingFederate"
+          },
+          {
+            "keyword": "When",
+            "text": "I attempt to map a non-existent Active Directory attribute 'invalidAttribute' to the 'sub' claim"
+          },
+          {
+            "keyword": "Then",
+            "text": "PingFederate displays an error message indicating that the attribute 'invalidAttribute' cannot be found in Active Directory"
+          },
+          {
+            "keyword": "And",
+            "text": "The configuration is not saved"
+          }
+        ]
+      },
+      {
+        "name": "Authentication Failure Due to Invalid Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "PingFederate is configured as an OpenID Connect provider with Active Directory attribute mapping"
+          },
+          {
+            "keyword": "And",
+            "text": "A test client application is registered in PingFederate"
+          },
+          {
+            "keyword": "When",
+            "text": "I initiate an OpenID Connect authentication flow from the test client with invalid Active Directory credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "The authentication fails"
+          },
+          {
+            "keyword": "And",
+            "text": "PingFederate returns an error message indicating invalid credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "The test client does not receive an ID token"
+          }
+        ]
+      },
+      {
+        "name": "Performance - Claim Retrieval Time",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "PingFederate is configured as an OpenID Connect provider with Active Directory attribute mapping"
+          },
+          {
+            "keyword": "And",
+            "text": "A test client application is registered in PingFederate"
+          },
+          {
+            "keyword": "When",
+            "text": "I initiate 100 concurrent OpenID Connect authentication flows from the test client"
+          },
+          {
+            "keyword": "Then",
+            "text": "The average time to retrieve user claims from Active Directory is less than 200 milliseconds"
+          }
+        ]
+      },
+      {
+        "name": "Security - Client Authentication with Client Secret",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "PingFederate is configured as an OpenID Connect provider with Active Directory attribute mapping"
+          },
+          {
+            "keyword": "And",
+            "text": "A test client application is registered in PingFederate with a client secret"
+          },
+          {
+            "keyword": "When",
+            "text": "I initiate an OpenID Connect authentication flow from the test client without providing the client secret"
+          },
+          {
+            "keyword": "Then",
+            "text": "The authentication fails"
+          },
+          {
+            "keyword": "And",
+            "text": "PingFederate returns an error message indicating invalid client credentials"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-2",
+    "title": "User Story - Implement OAuth 2.0 Client for Machine-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application Developer",
+      "goal": "Implement an OAuth 2.0 client using the Client Credentials grant type to enable secure machine-to-machine authentication.",
+      "benefit": "Allows the application to securely access resources on behalf of itself, without requiring human intervention.",
+      "formatted": "As an Application Developer, I want to implement an OAuth 2.0 client using the Client Credentials grant type, so that the application can securely access resources on behalf of itself, without requiring human intervention."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OAuth 2.0",
+      "Authlib or requests-oauthlib"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [
+      "Configure PingFederate for OpenID Connect"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Current pain points addressed by this story include: * Lack of Secure Machine-to-Machine Authentication: Without OAuth 2.0, applications might rely on insecure methods like hardcoded credentials or shared secrets, leading to vulnerabilities and potential breaches. * Manual Credential Management: Managing and rotating credentials manually is error-prone and time-consuming, increasing the risk of credential compromise. * Limited Access Control: Without proper authorization mechanisms, applications might have excessive permissions, increasing the potential impact of a security breach. * Auditing and Traceability Challenges: Difficult to track which application accessed which resources and when, hindering auditing and incident response efforts. * Scalability Issues: Managing credentials for a growing number of applications becomes increasingly complex and difficult to scale. * Compliance Requirements: Many regulatory frameworks require secure authentication and authorization mechanisms, which are not met by insecure credential management practices. * Dependency on Human Intervention: Processes requiring manual intervention for authentication are inefficient and can lead to delays.",
+      "success_metrics": "Specific, measurable metrics to evaluate the success of this story: * Successful Token Acquisition Rate: Percentage of successful access token requests from PingFederate using the Client Credentials grant type (target: >99.9%). * Resource Access Success Rate: Percentage of successful requests to protected resources using the acquired access token (target: >99.9%). * Token Refresh Rate: Frequency of token refresh operations to ensure continuous access to resources. * Token Expiration Handling: Proper handling of token expiration and automatic token refresh without service interruption. * Security Vulnerability Scan Results: Number of security vulnerabilities identified in the OAuth 2.0 client implementation (target: 0 critical, 0 high, <2 medium). * Credential Storage Security: Assessment of the security of client credential storage using industry best practices (e.g., encryption, access control). * Audit Log Completeness: Completeness and accuracy of audit logs related to token acquisition and resource access. * Response Time: Average response time for token acquisition and resource access requests (target: <200ms). * Error Rate: Number of errors encountered during token acquisition and resource access (target: <0.1%). * Code Coverage: Unit test code coverage for the OAuth 2.0 client implementation (target: >80%).",
+      "similar_implementations": "Examples of similar implementations, tools, or references that can guide this implementation: * Authlib: A comprehensive Python library for building OAuth 2.0 clients and servers. Provides support for various grant types, including Client Credentials. * Requests-OAuthlib: A Python library that provides OAuth 1.0a and OAuth 2.0 support for the Requests library. * OAuth 2.0 Client Libraries: Many programming languages have dedicated OAuth 2.0 client libraries (e.g., Spring Security OAuth2 in Java, Microsoft.Identity.Client in .NET). * PingFederate Documentation: PingFederate's official documentation provides detailed information on configuring and using the Client Credentials grant type. * RFC 6749 (The OAuth 2.0 Authorization Framework): The official specification for OAuth 2.0. * OAuth 2.0 Security Best Current Practice: IETF document outlining security best practices for OAuth 2.0. * Example Implementations: GitHub repositories and online tutorials demonstrating OAuth 2.0 client implementations using Python and Authlib or Requests-OAuthlib. * Cloud Provider SDKs: Cloud providers (e.g., AWS, Azure, GCP) often provide SDKs with built-in support for OAuth 2.0 authentication.",
+      "modern_approaches": "Current (2024-2025) best practices, patterns, and modern approaches relevant to this story: * Secure Credential Storage: Use secure storage mechanisms like HashiCorp Vault, AWS Secrets Manager, Azure Key Vault, or GCP Secret Manager to store client credentials. * Token Rotation: Implement token rotation to minimize the impact of compromised tokens. * Mutual TLS (mTLS): Consider using mTLS for enhanced security during token exchange. * JSON Web Tokens (JWTs): Use JWTs for access tokens to enable stateless validation and easier integration with microservices. * OpenID Connect (OIDC) Discovery: Leverage OIDC Discovery to dynamically retrieve configuration information from PingFederate. * Dynamic Client Registration: Explore Dynamic Client Registration to automate the client registration process. * Observability: Implement robust logging and monitoring to track token acquisition, resource access, and potential security issues. * Infrastructure as Code (IaC): Use IaC tools like Terraform or CloudFormation to automate the deployment and configuration of the OAuth 2.0 client. * Containerization and Orchestration: Deploy the OAuth 2.0 client as a containerized application using Docker and orchestrate it with Kubernetes. * Zero Trust Security: Adopt a Zero Trust security model, which assumes that no user or device is trusted by default. * Regular Security Audits: Conduct regular security audits and penetration testing to identify and address potential vulnerabilities. * Use of short-lived tokens: Configure PingFederate to issue short-lived tokens to reduce the window of opportunity for attackers to exploit compromised tokens. * Consider using Proof Key for Code Exchange (PKCE) even for M2M: While primarily designed for public clients, PKCE can add an extra layer of security to M2M flows, especially if the client secret is ever compromised."
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates obtaining an access token from PingFederate using the Client Credentials grant type with Authlib.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\n\n# Environment variables for security\nCLIENT_ID = os.environ.get('OAUTH_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('OAUTH_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('OAUTH_TOKEN_ENDPOINT')\nRESOURCE_SERVER_URL = os.environ.get('RESOURCE_SERVER_URL')\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, RESOURCE_SERVER_URL]):\n    raise ValueError(\"Missing required environment variables.\")\n\n# Create an OAuth2Session client\nclient = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n\n# Request an access token using the Client Credentials grant\ntry:\n    token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n    print(\"Token obtained successfully:\", token)\n\n    # Access a protected resource (example)\n    response = client.get(RESOURCE_SERVER_URL)\n    response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\n    print(\"Resource server response:\", response.json())\n\nexcept Exception as e:\n    print(f\"Error obtaining token or accessing resource: {e}\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates secure token storage and retrieval using a simple in-memory cache (for demonstration purposes only; use a more robust solution in production).",
+        "code": "import os\nfrom authlib.integrations.requests_client import OAuth2Session\nimport threading\n\n# Environment variables for security\nCLIENT_ID = os.environ.get('OAUTH_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('OAUTH_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('OAUTH_TOKEN_ENDPOINT')\nRESOURCE_SERVER_URL = os.environ.get('RESOURCE_SERVER_URL')\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, RESOURCE_SERVER_URL]):\n    raise ValueError(\"Missing required environment variables.\")\n\n# In-memory token cache (replace with a secure storage mechanism in production)\ntoken_cache = {}\ntoken_lock = threading.Lock()\n\ndef get_token():\n    with token_lock:\n        if 'token' in token_cache:\n            return token_cache['token']\n        else:\n            # Create an OAuth2Session client\n            client = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n            try:\n                token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n                token_cache['token'] = token\n                return token\n            except Exception as e:\n                print(f\"Error obtaining token: {e}\")\n                return None\n\ndef access_resource():\n    token = get_token()\n    if token:\n        client = OAuth2Session(CLIENT_ID, token=token)\n        try:\n            response = client.get(RESOURCE_SERVER_URL)\n            response.raise_for_status()\n            print(\"Resource server response:\", response.json())\n        except Exception as e:\n            print(f\"Error accessing resource: {e}\")\n    else:\n        print(\"Failed to obtain token, cannot access resource.\")\n\n# Example usage\naccess_resource()"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates error handling for token retrieval and resource access, including handling invalid client credentials and network errors.",
+        "code": "import os\nfrom authlib.integrations.requests_client import OAuth2Session\nimport requests\n\n# Environment variables for security\nCLIENT_ID = os.environ.get('OAUTH_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('OAUTH_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('OAUTH_TOKEN_ENDPOINT')\nRESOURCE_SERVER_URL = os.environ.get('RESOURCE_SERVER_URL')\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, RESOURCE_SERVER_URL]):\n    raise ValueError(\"Missing required environment variables.\")\n\nclient = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n\ntry:\n    token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n    print(\"Token obtained successfully:\", token)\n\n    try:\n        response = client.get(RESOURCE_SERVER_URL)\n        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\n        print(\"Resource server response:\", response.json())\n\n    except requests.exceptions.HTTPError as e:\n        print(f\"HTTP Error accessing resource: {e}\")\n        if e.response.status_code == 401:\n            print(\"Likely an authorization issue. Check scopes and token validity.\")\n    except requests.exceptions.RequestException as e:\n        print(f\"Network error accessing resource: {e}\")\n\nexcept requests.exceptions.RequestException as e:\n    print(f\"Network error obtaining token: {e}\")\nexcept Exception as e:\n    print(f\"Error obtaining token: {e}\")"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Client Credentials Grant Flow",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the OAuth 2.0 client is configured with valid client ID, client secret, and token endpoint URL"
+          },
+          {
+            "keyword": "And",
+            "text": "the client is configured with the correct scope for accessing the protected resource"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token using the Client Credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a valid access token from PingFederate"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token is stored securely"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token can be used to successfully access the protected resource"
+          }
+        ]
+      },
+      {
+        "name": "Invalid Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the OAuth 2.0 client is configured with an invalid client ID or client secret"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token using the Client Credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an error response from PingFederate indicating invalid client credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "the error response includes an appropriate error code and description (e.g., invalid_client)"
+          },
+          {
+            "keyword": "And",
+            "text": "the application does not attempt to access the protected resource"
+          }
+        ]
+      },
+      {
+        "name": "Insufficient Scope",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the OAuth 2.0 client is configured with a scope that does not allow access to the protected resource"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token using the Client Credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a valid access token from PingFederate"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to access the protected resource using the access token"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an error response from the protected resource indicating insufficient scope"
+          },
+          {
+            "keyword": "And",
+            "text": "the error response includes an appropriate error code and description (e.g., insufficient_scope)"
+          }
+        ]
+      },
+      {
+        "name": "Token Expiration and Refresh",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the OAuth 2.0 client has obtained a valid access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token has expired"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to access the protected resource using the expired access token"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an error response from the protected resource indicating an invalid or expired token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests a new access token using the Client Credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a new valid access token from PingFederate"
+          },
+          {
+            "keyword": "And",
+            "text": "the new access token can be used to successfully access the protected resource"
+          }
+        ]
+      },
+      {
+        "name": "High Volume Token Requests",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the OAuth 2.0 client is configured with valid credentials"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests access tokens at a rate of 100 requests per second for 5 minutes"
+          },
+          {
+            "keyword": "Then",
+            "text": "all access token requests are processed successfully without exceeding a predefined latency threshold (e.g., 200ms average response time)"
+          },
+          {
+            "keyword": "And",
+            "text": "PingFederate does not throttle the application's requests"
+          },
+          {
+            "keyword": "And",
+            "text": "the application's performance remains stable under high load"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-3",
+    "title": "User Story - Implement OpenID Connect Authentication for Human Users",
+    "type": "User Story",
+    "description": {
+      "role": "Application User",
+      "goal": "Authenticate to the application using my existing Active Directory credentials via OpenID Connect.",
+      "benefit": "Provides a seamless and secure login experience using existing enterprise credentials.",
+      "formatted": "As an Application User, I want to authenticate to the application using my existing Active Directory credentials via OpenID Connect, so that I have a seamless and secure login experience using existing enterprise credentials."
+    },
+    "technical_domain": "OpenID Connect Integration",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OpenID Connect",
+      "Flask-OIDC (or similar)",
+      "Frontend Development (HTML, JavaScript)"
+    ],
+    "suggested_assignee": "Full Stack Developer",
+    "dependencies": [
+      "Configure PingFederate for OpenID Connect"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Current pain points addressed by this story include: * Password Fatigue: Users are burdened with remembering and managing multiple sets of credentials for different applications, leading to password fatigue and potentially insecure password practices. * Inconsistent Login Experience: Lack of a unified authentication mechanism results in a fragmented and inconsistent login experience across different applications. * Security Risks: Managing authentication within the application itself can introduce security vulnerabilities if not implemented correctly (e.g., storing passwords insecurely). * Administrative Overhead: Managing user accounts and permissions within each application separately increases administrative overhead and complexity. * Onboarding/Offboarding Challenges: Manually creating and deleting user accounts in each application is time-consuming and prone to errors, especially during onboarding and offboarding processes. * Compliance Issues: Maintaining compliance with security regulations (e.g., GDPR, HIPAA) becomes more challenging when authentication is handled inconsistently across applications. * Lack of Single Sign-On (SSO): Without SSO, users must repeatedly authenticate to different applications, reducing productivity and user satisfaction. * Potential for Phishing Attacks: Users are more susceptible to phishing attacks when they have to enter their credentials into multiple unfamiliar login forms.",
+      "success_metrics": "Specific, measurable metrics to evaluate the success of this story: * Login Success Rate: Percentage of users who successfully authenticate using OpenID Connect. * Authentication Time: Time taken for a user to authenticate and gain access to the application. * User Adoption Rate: Percentage of users who switch to using OpenID Connect authentication compared to previous methods. * Support Ticket Reduction: Number of support tickets related to login issues after OpenID Connect implementation. * Security Audit Score: Improvement in security audit scores related to authentication and access control. * Session Security: Measure the effectiveness of session management techniques (e.g., session timeout, token revocation) in preventing unauthorized access. * Error Rate: Number of authentication failures due to technical issues or misconfiguration. * Accessibility Compliance: Percentage of users with disabilities who can successfully authenticate using OpenID Connect. * PingFederate Integration Success: Successful retrieval of user attributes (name, email) from PingFederate claims.",
+      "similar_implementations": "Examples of similar implementations, tools, or references that can guide this implementation: * Flask-OIDC: A popular Python library for integrating OpenID Connect authentication into Flask applications. (https://github.com/puiterwijk/flask-oidc) * Authlib: A comprehensive Python library for building OAuth and OpenID Connect clients and servers. (https://authlib.org/) * Microsoft Authentication Library (MSAL): Libraries available for various languages (including Python) for integrating with Azure Active Directory using OpenID Connect. (https://github.com/AzureAD/microsoft-authentication-library-for-python) * Okta: A commercial identity provider that offers OpenID Connect integration capabilities. (https://www.okta.com/) * Keycloak: An open-source identity and access management solution that supports OpenID Connect. (https://www.keycloak.org/) * PingFederate Documentation: The official PingFederate documentation provides detailed information on configuring OpenID Connect. (https://www.pingidentity.com/en/resources/documentation.html) * OpenID Connect Specifications: The official OpenID Connect specifications provide a comprehensive overview of the protocol. (https://openid.net/specs/openid-connect-core-1_0.html) * Example Implementations: Search GitHub and other code repositories for example implementations of OpenID Connect with Flask and Active Directory.",
+      "modern_approaches": "Current (2024-2025) best practices, patterns, and modern approaches relevant to this story: * Passwordless Authentication: Explore passwordless authentication methods (e.g., FIDO2, WebAuthn) as a potential future enhancement to improve security and user experience. * Multi-Factor Authentication (MFA): Implement MFA to add an extra layer of security to the authentication process. * Risk-Based Authentication: Implement risk-based authentication to dynamically adjust the authentication requirements based on the user's behavior and context. * Federated Identity Management: Use federated identity management to allow users to authenticate using their existing credentials from other identity providers. * Token-Based Authentication: Use JSON Web Tokens (JWTs) for secure and stateless authentication. * OAuth 2.0 Best Current Practices: Adhere to the OAuth 2.0 Best Current Practices (BCP) to ensure secure implementation. (https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics) * Infrastructure as Code (IaC): Use IaC tools (e.g., Terraform, Ansible) to automate the deployment and configuration of the OpenID Connect integration. * Containerization and Orchestration: Deploy the application and its dependencies in containers (e.g., Docker) and orchestrate them using Kubernetes. * Observability: Implement robust logging, monitoring, and tracing to gain insights into the performance and security of the authentication process. * Zero Trust Architecture: Adopt a Zero Trust security model, which assumes that no user or device is trusted by default. * Continuous Integration/Continuous Deployment (CI/CD): Use CI/CD pipelines to automate the build, testing, and deployment of the application. * Security Information and Event Management (SIEM): Integrate with a SIEM system to detect and respond to security threats. * Client-Side Routing: Consider using client-side routing in the frontend to improve performance and user experience after authentication. * Use of PKCE (Proof Key for Code Exchange): When using authorization code flow, always implement PKCE to mitigate authorization code interception attacks, especially for native and mobile applications."
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Flask application setup with Flask-OIDC for OpenID Connect authentication.  Demonstrates core functionality: initialization, configuration, and login/logout routes.",
+        "code": "from flask import Flask, redirect, url_for, session, render_template\nfrom flask_oidc import OpenIDConnect\nimport os\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = os.urandom(24)  # Replace with a strong, persistent secret in production\napp.config['OIDC_CLIENT_SECRETS'] = 'client_secrets.json'  # Path to your client secrets file\napp.config['OIDC_ID_TOKEN_COOKIE_SECURE'] = False  # Set to True in production (HTTPS)\napp.config['OIDC_REQUIRE_VERIFIED_EMAIL'] = False  # Adjust based on your requirements\napp.config['OIDC_SCOPES'] = ['openid', 'profile', 'email'] # Request scopes\n\noidc = OpenIDConnect(app)\n\n@app.route('/')\n@oidc.require_login\ndef index():\n    return render_template('index.html', user_info=session.get('user_info'))\n\n@app.route('/login')\n@oidc.require_login\ndef login():\n    # Access user info from OIDC claims\n    session['user_info'] = {\n        'name': oidc.user_getfield('name'),\n        'email': oidc.user_getfield('email')\n    }\n    return redirect(url_for('index'))\n\n@app.route('/logout')\ndef logout():\n    oidc.logout()\n    session.clear()\n    return redirect(url_for('index'))\n\n@app.errorhandler(401)\ndef unauthorized(e):\n    return render_template('unauthorized.html'), 401\n\nif __name__ == '__main__':\n    app.run(debug=True, host='0.0.0.0', port=5000)"
+      },
+      {
+        "language": "json",
+        "description": "Example client_secrets.json file.  This file contains the client ID and secret provided by the OpenID Connect provider (PingFederate in this case).",
+        "code": "{\n  \"web\": {\n    \"client_id\": \"YOUR_CLIENT_ID\",\n    \"client_secret\": \"YOUR_CLIENT_SECRET\",\n    \"redirect_uris\": [\n      \"http://localhost:5000/oidc_callback\"\n    ],\n    \"issuer\": \"YOUR_OPENID_CONNECT_ISSUER_URL\"  // e.g., PingFederate's issuer URL\n  }\n}"
+      },
+      {
+        "language": "python",
+        "description": "Error handling and edge cases. Demonstrates handling authentication failures and displaying a user-friendly error message.  Also shows how to protect routes that require authentication.",
+        "code": "from flask import Flask, redirect, url_for, session, render_template, request\nfrom flask_oidc import OpenIDConnect\nimport os\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = os.urandom(24)\napp.config['OIDC_CLIENT_SECRETS'] = 'client_secrets.json'\napp.config['OIDC_ID_TOKEN_COOKIE_SECURE'] = False\napp.config['OIDC_REQUIRE_VERIFIED_EMAIL'] = False\napp.config['OIDC_SCOPES'] = ['openid', 'profile', 'email']\n\noidc = OpenIDConnect(app)\n\n@app.route('/')\ndef index():\n    if 'user_info' in session:\n        return render_template('index.html', user_info=session['user_info'])\n    else:\n        return render_template('index.html', user_info=None)\n\n@app.route('/login')\n@oidc.require_login\ndef login():\n    try:\n        session['user_info'] = {\n            'name': oidc.user_getfield('name'),\n            'email': oidc.user_getfield('email')\n        }\n        return redirect(url_for('index'))\n    except Exception as e:\n        # Log the error for debugging\n        print(f\"Authentication Error: {e}\")\n        # Redirect to an error page or display an error message\n        return render_template('error.html', error_message=\"Authentication failed. Please try again later.\"), 500\n\n@app.route('/logout')\ndef logout():\n    oidc.logout()\n    session.clear()\n    return redirect(url_for('index'))\n\n@app.errorhandler(401)\ndef unauthorized(e):\n    return render_template('unauthorized.html'), 401\n\n@app.errorhandler(500)\ndef internal_server_error(e):\n    return render_template('error.html', error_message=\"An unexpected error occurred.\"), 500\n\nif __name__ == '__main__':\n    app.run(debug=True, host='0.0.0.0', port=5000)"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Login with Active Directory Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am on the application login page"
+          },
+          {
+            "keyword": "When",
+            "text": "I click the 'Login with Active Directory' button"
+          },
+          {
+            "keyword": "And",
+            "text": "I am redirected to the PingFederate login page"
+          },
+          {
+            "keyword": "And",
+            "text": "I enter my valid Active Directory username and password"
+          },
+          {
+            "keyword": "And",
+            "text": "I click the 'Submit' button"
+          },
+          {
+            "keyword": "Then",
+            "text": "I am redirected back to the application"
+          },
+          {
+            "keyword": "And",
+            "text": "I am logged in successfully"
+          },
+          {
+            "keyword": "And",
+            "text": "My name and email are displayed correctly on my profile page, retrieved from PingFederate claims"
+          }
+        ]
+      },
+      {
+        "name": "Failed Login with Invalid Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am on the application login page"
+          },
+          {
+            "keyword": "When",
+            "text": "I click the 'Login with Active Directory' button"
+          },
+          {
+            "keyword": "And",
+            "text": "I am redirected to the PingFederate login page"
+          },
+          {
+            "keyword": "And",
+            "text": "I enter an invalid Active Directory username and password"
+          },
+          {
+            "keyword": "And",
+            "text": "I click the 'Submit' button"
+          },
+          {
+            "keyword": "Then",
+            "text": "I see an error message indicating invalid credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "I remain on the PingFederate login page"
+          },
+          {
+            "keyword": "And",
+            "text": "I am not logged into the application"
+          }
+        ]
+      },
+      {
+        "name": "Session Timeout and Automatic Logout",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am logged in to the application using Active Directory credentials"
+          },
+          {
+            "keyword": "When",
+            "text": "I am inactive for the session timeout period (e.g., 30 minutes)"
+          },
+          {
+            "keyword": "Then",
+            "text": "I am automatically logged out of the application"
+          },
+          {
+            "keyword": "And",
+            "text": "I am redirected to the login page"
+          },
+          {
+            "keyword": "And",
+            "text": "I am prompted to log in again"
+          }
+        ]
+      },
+      {
+        "name": "Accessibility - Login Page with Screen Reader",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am using a screen reader on the application login page"
+          },
+          {
+            "keyword": "When",
+            "text": "The screen reader reads the page content"
+          },
+          {
+            "keyword": "Then",
+            "text": "The screen reader correctly announces the 'Login with Active Directory' button label"
+          },
+          {
+            "keyword": "And",
+            "text": "The screen reader correctly announces the error messages when login fails"
+          },
+          {
+            "keyword": "And",
+            "text": "The screen reader correctly announces the form fields and their labels on the PingFederate login page"
+          }
+        ]
+      },
+      {
+        "name": "OpenID Connect Configuration Error",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "The OpenID Connect configuration is incorrect (e.g., invalid client ID)"
+          },
+          {
+            "keyword": "When",
+            "text": "I click the 'Login with Active Directory' button"
+          },
+          {
+            "keyword": "Then",
+            "text": "I see an error message indicating a problem with the OpenID Connect configuration"
+          },
+          {
+            "keyword": "And",
+            "text": "The error message includes a descriptive error code or message for debugging"
+          },
+          {
+            "keyword": "And",
+            "text": "I am not logged into the application"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-4",
+    "title": "User Story - Implement Token Revocation",
+    "type": "User Story",
+    "description": {
+      "role": "Security Team",
+      "goal": "Implement token revocation functionality to immediately invalidate access tokens.",
+      "benefit": "Enhances security by allowing immediate termination of access in case of compromise or policy change.",
+      "formatted": "As a Security Team, I want to implement token revocation functionality, so that we can immediately invalidate access tokens in case of compromise or policy change."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OAuth 2.0",
+      "PingFederate API"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [
+      "Implement OAuth 2.0 Client for Machine-to-Machine Authentication",
+      "Implement OpenID Connect Authentication for Human Users"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Currently, without token revocation, compromised or misused access tokens remain valid until their natural expiration. This creates a window of vulnerability where unauthorized access to protected resources is possible. This lack of immediate control hinders the security team's ability to respond effectively to security incidents or enforce policy changes. Auditing and compliance become more challenging as there's no clear record of when a token was actively invalidated due to compromise. Manual intervention, such as disabling user accounts, might be the only recourse, which is less granular and potentially disruptive.",
+      "success_metrics": "1. Revocation Latency: Time taken from initiating a revocation request to the token becoming invalid (target: < 1 second). 2. Revocation Success Rate: Percentage of revocation requests that are successfully processed by PingFederate (target: 99.9%). 3. Error Rate: Percentage of revocation requests that result in errors (target: < 0.1%). 4. Audit Log Completeness: Percentage of revocation events that are accurately logged with relevant details (target: 100%). 5. Resource Access Denial: Verify that revoked tokens are consistently denied access to protected resources. 6. Security Incident Response Time: Reduction in the time required to mitigate security incidents involving compromised tokens. 7. Compliance Audit Pass Rate: Improved pass rate for compliance audits related to token management.",
+      "similar_implementations": "1. OAuth 2.0 RFC 7009 (Token Revocation): The standard specification for token revocation. 2. PingFederate Documentation: PingFederate's official documentation on token revocation, including API endpoints and request/response formats. 3. Spring Security OAuth: Spring Security's OAuth 2.0 implementation provides token revocation capabilities. 4. Auth0: Auth0's token revocation API and documentation. 5. Okta: Okta's token revocation API and documentation. 6. Keycloak: Keycloak's token revocation functionality and API. 7. Example Code Repositories: Search GitHub and other code repositories for examples of OAuth 2.0 token revocation implementations using Python and PingFederate.",
+      "modern_approaches": "1. Asynchronous Revocation: Implement asynchronous processing of revocation requests to avoid blocking the main application thread and improve performance. Use message queues (e.g., RabbitMQ, Kafka) for handling revocation events. 2. Centralized Revocation Service: Consider a dedicated microservice for handling token revocation requests, providing a single point of control and simplifying integration with multiple applications. 3. JSON Web Token (JWT) Metadata: Leverage JWT metadata (e.g., 'jti' - JWT ID) for efficient token identification and revocation. 4. Revocation Lists/Bloom Filters: Explore using revocation lists or Bloom filters to efficiently check the validity of tokens without constantly querying PingFederate. However, consider the trade-offs between performance and eventual consistency. 5. Observability: Implement robust monitoring and alerting for token revocation events, including metrics on revocation latency, success rates, and error rates. Use tools like Prometheus, Grafana, and ELK stack. 6. Idempotency: Ensure that revocation requests are idempotent, meaning that processing the same request multiple times has the same effect as processing it once. This prevents unintended consequences in case of network issues or retries. 7. Security Hardening: Implement security best practices for the revocation endpoint, such as rate limiting, input validation, and authentication/authorization. 8. Zero Trust Architecture: Token revocation is a key component of a Zero Trust architecture, ensuring that access is continuously verified and can be revoked at any time. 9. Dynamic Client Registration: If applicable, ensure token revocation is properly integrated with dynamic client registration flows. 10. OpenID Connect Back-Channel Logout: Consider implementing OpenID Connect back-channel logout in conjunction with token revocation for a more comprehensive logout experience."
+    },
+    "code_blocks": [
+      {
+        "language": "text",
+        "description": "Raw LLM response (parsing failed)",
+        "code": "```json\n[\n  {\n    \"language\": \"python\",\n    \"description\": \"Demonstrates the core functionality of initiating a token revocation request to PingFederate using the requests library.  Includes basic error handling.\",\n    \"code\": \"import requests\\nimport logging\\nimport os\\n\\n# Configure logging\\nlogging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\\n\\n# Load configuration from environment variables (best practice for secrets)\\nPING_FEDERATE_REVOCATION_ENDPOINT = os.environ.get('PING_FEDERATE_REVOCATION_ENDPOINT')\\nCLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\\nCLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\\n\\n\\ndef revoke_token(token: str, token_type_hint: str = 'access_token') -> bool:\\n    \\\"\\\"\\\"Revokes a given token using the PingFederate revocation endpoint.\\n\\n    Args:\\n        token: The token to revoke.\\n        token_type_hint:  Optional hint about the token type (access_token or refresh_token).\\n\\n    Returns:\\n        True if the revocation was successful, False otherwise.\\n    \\\"\\\"\\\"\\n    if not PING_FEDERATE_REVOCATION_ENDPOINT or not CLIENT_ID or not CLIENT_SECRET:\\n        logging.error(\\\"Missing required environment variables for PingFederate configuration.\\\")\\n        return False\\n\\n    data = {\\n        'token': token,\\n        'token_type_hint': token_type_hint\\n    }\\n    auth = (CLIENT_ID, CLIENT_SECRET)\\n    headers = {'Content-Type': 'application/x-www-form-urlencoded'}\\n\\n    try:\\n        response = requests.post(PING_FEDERATE_REVOCATION_ENDPOINT, data=data, auth=auth, headers=headers)\\n        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\\n\\n        if response.status_code == 200:\\n            logging.info(f\\\"Token revocation successful for token: {token[:10]}... (truncated)\\\")\\n            return True\\n        else:\\n            logging.warning(f\\\"Unexpected status code: {response.status_code} - {response.text}\\\")\\n            return False\\n\\n    except requests.exceptions.RequestException as e:\\n        logging.error(f\\\"Error during token revocation: {e}\\\")\\n        return False\\n\\n\\nif __name__ == '__main__':\\n    # Example usage (replace with actual token)\\n    test_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'\\n    success = revoke_token(test_token)\\n    if success:\\n        print(\\\"Token revocation initiated successfully.\\\")\\n    else:\\n        print(\\\"Token revocation failed.\\\")\"\n  },\n  {\n    \"language\": \"python\",\n    \"description\": \"Demonstrates integration with a hypothetical protected resource endpoint.  It checks if a token is valid before allowing access, simulating the impact of revocation.\",\n    \"code\": \"import requests\\nimport logging\\nimport os\\n\\n# Configure logging\\nlogging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\\n\\n# Load configuration from environment variables\\nPROTECTED_RESOURCE_ENDPOINT = os.environ.get('PROTECTED_RESOURCE_ENDPOINT')\\n\\n\\ndef access_protected_resource(access_token: str) -> str:\\n    \\\"\\\"\\\"Attempts to access a protected resource using the provided access token.\\n\\n    This function simulates checking the token's validity (e.g., against a token introspection endpoint or a local cache).\\n    For simplicity, this example assumes that if the request to the protected resource fails with a 401, the token is considered invalid.\\n\\n    Args:\\n        access_token: The access token to use.\\n\\n    Returns:\\n        The response from the protected resource if successful, or an error message if not.\\n    \\\"\\\"\\\"\\n    if not PROTECTED_RESOURCE_ENDPOINT:\\n        logging.error(\\\"Missing PROTECTED_RESOURCE_ENDPOINT environment variable.\\\")\\n        return \\\"Error: Protected resource endpoint not configured.\\\"\\n\\n    headers = {'Authorization': f'Bearer {access_token}'}\\n\\n    try:\\n        response = requests.get(PROTECTED_RESOURCE_ENDPOINT, headers=headers)\\n        response.raise_for_status()  # Raise HTTPError for bad responses\\n        return response.text\\n\\n    except requests.exceptions.HTTPError as e:\\n        if e.response.status_code == 401:\\n            logging.warning(\\\"Access token is invalid (401 Unauthorized).\\\")\\n            return \\\"Error: Invalid access token.\\\"\\n        else:\\n            logging.error(f\\\"Error accessing protected resource: {e}\\\")\\n            return f\\\"Error: {e}\\\"\\n    except requests.exceptions.RequestException as e:\\n        logging.error(f\\\"Error accessing protected resource: {e}\\\")\\n        return f\\\"Error: {e}\\\"\\n\\n\\nif __name__ == '__main__':\\n    # Example usage (replace with actual token)\\n    valid_token = 'valid_access_token'  # Replace with a valid token initially\\n    invalid_token = 'invalid_access_token' # Replace with an invalid token after revocation\\n\\n    # Simulate accessing the protected resource with a valid token\\n    result = access_protected_resource(valid_token)\\n    print(f\\\"Accessing with valid token: {result}\\\")\\n\\n    # Simulate accessing the protected resource with an invalid token (after revocation)\\n    result = access_protected_resource(invalid_token)\\n    print(f\\\"Accessing with invalid token: {result}\\\")\"\n  },\n  {\n    \"language\": \"python\",\n    \"description\": \"Demonstrates more robust error handling, including retry logic with exponential backoff, and logging of different error scenarios.\",\n    \"code\": \"import requests\\nimport logging\\nimport os\\nimport time\\n\\n# Configure logging\\nlogging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')\\n\\n# Load configuration from environment variables\\nPING_FEDERATE_REVOCATION_ENDPOINT = os.environ.get('PING_FEDERATE_REVOCATION_ENDPOINT')\\nCLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\\nCLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\\nMAX_RETRIES = 3\\n\\n\\ndef revoke_token_with_retry(token: str, token_type_hint: str = 'access_token', max_retries: int = MAX_RETRIES) -> bool:\\n    \\\"\\\"\\\"Revokes a token with retry logic and exponential backoff.\\n\\n    Args:\\n        token: The token to revoke.\\n        token_type_hint: Optional hint about the token type.\\n        max_retries: Maximum number of retry attempts.\\n\\n    Returns:\\n        True if revocation was successful, False otherwise.\\n    \\\"\\\"\\\"\\n    if not PING_FEDERATE_REVOCATION_ENDPOINT or not CLIENT_ID or not CLIENT_SECRET:\\n        logging.error(\\\"Missing required environment variables for PingFederate configuration.\\\")\\n        return False\\n\\n    data = {\\n        'token': token,\\n        'token_type_hint': token_type_hint\\n    }\\n    auth = (CLIENT_ID, CLIENT_SECRET)\\n    headers = {'Content-Type': 'application/x-www-form-urlencoded'}\\n\\n    for attempt in range(max_retries):\\n        try:\\n            response = requests.post(PING_FEDERATE_REVOCATION_ENDPOINT, data=data, auth=auth, headers=headers)\\n            response.raise_for_status()  # Raise HTTPError for bad responses\\n\\n            if response.status_code == 200:\\n                logging.info(f\\\"Token revocation successful for token: {token[:10]}... (truncated) after {attempt + 1} attempts.\\\")\\n                return True\\n            else:\\n                logging.warning(f\\\"Unexpected status code: {response.status_code} - {response.text}\\\")\\n                return False\\n\\n        except requests.exceptions.RequestException as e:\\n            logging.error(f\\\"Error during token revocation (attempt {attempt + 1}): {e}\\\")\\\n            if attempt < max_retries - 1:\\n                wait_time = 2 ** attempt  # Exponential backoff\\n                logging.info(f\\\"Retrying in {wait_time} seconds...\\\")\\n                time.sleep(wait_time)\\n            else:\\n                logging.error(\\\"Max retries reached. Token revocation failed.\\\")\\n                return False\\n\\n    return False\\n\\n\\nif __name__ == '__main__':\\n    # Example usage (replace with actual token)\\n    test_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'\\n    success = revoke_token_with_retry(test_token)\\n    if success:\\n        print(\\\"Token revocation initiated successfully.\\\")\\n    else:\\n        print(\\\"Token revocation failed.\\\")\"\n  }\n]\n```"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Token Revocation",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an access token exists"
+          },
+          {
+            "keyword": "And",
+            "text": "the Security Team initiates a token revocation request for the access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application sends the revocation request to PingFederate"
+          },
+          {
+            "keyword": "Then",
+            "text": "PingFederate confirms successful revocation"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the revocation event with details of the token and revoker"
+          },
+          {
+            "keyword": "And",
+            "text": "attempts to access protected resources with the revoked token are rejected"
+          }
+        ]
+      },
+      {
+        "name": "Token Revocation with Invalid Token",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an invalid or non-existent access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the Security Team initiates a token revocation request for the invalid token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application sends the revocation request to PingFederate"
+          },
+          {
+            "keyword": "Then",
+            "text": "PingFederate returns an error indicating the token is invalid or not found"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the revocation attempt with the error details"
+          },
+          {
+            "keyword": "And",
+            "text": "attempts to access protected resources with the invalid token are rejected (if they weren't already)"
+          }
+        ]
+      },
+      {
+        "name": "Token Revocation with PingFederate Unavailable",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an access token exists"
+          },
+          {
+            "keyword": "And",
+            "text": "PingFederate is temporarily unavailable"
+          },
+          {
+            "keyword": "And",
+            "text": "the Security Team initiates a token revocation request for the access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application sends the revocation request to PingFederate"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application handles the connection error gracefully"
+          },
+          {
+            "keyword": "And",
+            "text": "the application retries the revocation request after a short delay (configurable)"
+          },
+          {
+            "keyword": "And",
+            "text": "if retries fail after a configured number of attempts, the application logs the failure with appropriate error details"
+          },
+          {
+            "keyword": "And",
+            "text": "the Security Team is notified of the PingFederate unavailability"
+          }
+        ]
+      },
+      {
+        "name": "Token Revocation Performance Under Load",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the system is under normal operating load"
+          },
+          {
+            "keyword": "When",
+            "text": "multiple token revocation requests are initiated concurrently"
+          },
+          {
+            "keyword": "Then",
+            "text": "all revocation requests are processed within an acceptable timeframe (e.g., under 1 second per request)"
+          },
+          {
+            "keyword": "And",
+            "text": "the system's performance metrics (CPU, memory, network) remain within acceptable limits"
+          },
+          {
+            "keyword": "And",
+            "text": "no revocation requests are lost or fail due to resource contention"
+          }
+        ]
+      },
+      {
+        "name": "Unauthorized Token Revocation Attempt",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "an access token exists"
+          },
+          {
+            "keyword": "And",
+            "text": "a user without the necessary permissions attempts to initiate a token revocation request"
+          },
+          {
+            "keyword": "When",
+            "text": "the application receives the unauthorized revocation request"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application rejects the revocation request with an appropriate error message (e.g., 'Unauthorized')"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the unauthorized attempt, including the user's identity and the attempted action"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token remains valid"
+          }
+        ]
+      }
+    ]
+  }
+]

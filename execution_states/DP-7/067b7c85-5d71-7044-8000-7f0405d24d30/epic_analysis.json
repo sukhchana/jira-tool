@@ -1,0 +1,22 @@
+{
+  "main_objective": "Implement OAuth 2.0 authentication, integrated with Enterprise Active Directory via OpenID Connect, to support both machine-to-machine and human-to-machine access, leveraging PingFederate as the OAuth 2.0 server, within a Python-based project.",
+  "technical_domains": [
+    "OAuth 2.0 Implementation:** Best practices include using a well-vetted library like `Authlib` or `requests-oauthlib` in Python.  Focus on secure token handling (storage, validation, refresh).  Implement proper scopes and claims to control access.  Consider token revocation mechanisms.",
+    "OpenID Connect Integration:** Best practices involve carefully configuring PingFederate to act as an OpenID Connect provider.  Map Active Directory attributes to standard OIDC claims (e.g., `sub`, `name`, `email`).  Implement proper error handling for authentication failures.  Use a library like `Flask-OIDC` for easier integration with Python web frameworks.",
+    "Active Directory Integration:** Best practices include using secure protocols (LDAPS) for communication with Active Directory if direct access is required (though OpenID Connect should abstract this).  Follow the principle of least privilege when accessing AD data.  Implement proper logging and auditing of AD access.",
+    "PingFederate Configuration:** Best practices involve working closely with the PingFederate administrators to configure the necessary OAuth 2.0 clients, scopes, and claims.  Ensure that PingFederate is properly secured and monitored.  Understand the PingFederate API for programmatic configuration and management."
+  ],
+  "core_requirements": [
+    "Implement OAuth 2.0 authentication for both machine-to-machine and human-to-machine interactions.",
+    "Integrate with the existing Enterprise Active Directory for user identity management.",
+    "Utilize OpenID Connect to retrieve user details from Active Directory, specifying the mapping of AD attributes to OIDC claims (e.g., user ID, email).",
+    "Integrate with the existing PingFederate OAuth 2.0 server."
+  ],
+  "stakeholders": [
+    "Application Users (both human and machine)",
+    "Security Team",
+    "IT Operations/Infrastructure Team",
+    "Development Team",
+    "Compliance Team"
+  ]
+}

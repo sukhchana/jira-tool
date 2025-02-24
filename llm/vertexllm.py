@@ -48,15 +48,6 @@ def get_safety_settings():
     ]
     return safety_config
 
-    # ]
-    # return {
-    #     HarmCategory.HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-    #     HarmCategory.DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    #     HarmCategory.HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-    #     HarmCategory.SEXUAL_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-
-        
-    # }
 
 class VertexLLM:
     """Interface for Google Cloud's Vertex AI Gemini service using the official SDK"""
