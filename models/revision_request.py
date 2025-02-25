@@ -1,16 +1,17 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class RevisionRequest(BaseModel):
     """Model for requesting a revision to a ticket"""
     revision_request: str = Field(..., description="Description of the requested changes to the ticket")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "revision_request": "Please add error handling to the acceptance criteria"
             }
         }
+    )
 
 
 class RevisionConfirmation(BaseModel):

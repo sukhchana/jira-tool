@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Dict, Any, Optional
 
 from pydantic import Field
@@ -19,7 +19,7 @@ class EpicBreakdownResponse(BaseModel):
     # Execution metadata
     execution_id: str = Field(..., description="UUID7 of the execution")
     status: str = "success"
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Epic information
     epic_key: str

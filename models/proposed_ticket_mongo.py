@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Optional, Dict, Any
 
 from pydantic import Field
 from uuid_extensions import uuid7
+from pydantic import ConfigDict
 
 from .base_model import BaseModel
 
@@ -40,7 +41,7 @@ class ProposedTicketMongo(BaseModel):
     security_considerations: Optional[str] = None
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="UTC timestamp of creation")
     epic_key: str = Field(..., description="The JIRA epic key this ticket belongs to")
     execution_id: str = Field(..., description="The execution ID this ticket was generated in")
 
@@ -52,8 +53,8 @@ class ProposedTicketMongo(BaseModel):
             d['created_at'] = datetime.fromisoformat(d['created_at'])
         return d
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "proposal_id": "01HMW123ABC...",
                 "ticket_id": "USER-STORY-1",
@@ -83,3 +84,4 @@ class ProposedTicketMongo(BaseModel):
                 "execution_id": "01HMW456XYZ..."
             }
         }
+    )

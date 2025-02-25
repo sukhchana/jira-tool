@@ -184,3 +184,45 @@ class EpicPromptBuilder(BasePromptBuilder):
         [List of user stories and technical tasks in the formats specified above]
         </tasks>
         """
+
+    @staticmethod
+    def build_complexity_prompt(epic_summary: str, epic_description: str) -> str:
+        """Build prompt for epic complexity analysis"""
+        return f"""
+        Please analyze the following epic and provide a detailed complexity assessment.
+
+        Epic Summary: {epic_summary}
+
+        Epic Description:
+        {epic_description}
+
+        Please provide your analysis in the following format:
+
+        <complexity_analysis>
+        <overall_complexity>Low|Medium|High</overall_complexity>
+        <story_points>Estimated total story points (13-100)</story_points>
+        <duration>Estimated duration in weeks</duration>
+
+        <technical_factors>
+        - [Technical factor 1 affecting complexity]
+        - [Technical factor 2 affecting complexity]
+        </technical_factors>
+
+        <risk_factors>
+        - [Risk factor 1]
+        - [Risk factor 2]
+        </risk_factors>
+
+        <rationale>
+        [Detailed explanation of the complexity assessment]
+        </rationale>
+        </complexity_analysis>
+
+        Consider the following aspects in your analysis:
+        1. Technical complexity and scope
+        2. Dependencies and integrations
+        3. Team expertise requirements
+        4. Infrastructure needs
+        5. Security and compliance requirements
+        6. Testing and validation complexity
+        """

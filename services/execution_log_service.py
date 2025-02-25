@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any
 
 from loguru import logger
@@ -16,7 +16,7 @@ class ExecutionLogService:
         """Initialize with epic key to create unique log file"""
         self.epic_key = epic_key
         self.execution_id = str(uuid7())  # Generate UUID-7
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self.filename = f"execution_plans/EXECUTION_{epic_key}_{self.timestamp}.md"
         self.mongodb = MongoDBService()
 
@@ -27,7 +27,7 @@ class ExecutionLogService:
         with open(self.filename, "w") as f:
             f.write(f"# EXECUTION_PLAN_ID: {self.execution_id}\n\n")
             f.write(f"## Epic: {epic_key}\n")
-            f.write(f"## Started: {datetime.now().isoformat()}\n\n")
+            f.write(f"## Started: {datetime.now(UTC).isoformat()}\n\n")
 
     async def create_execution_record(
             self,
@@ -55,7 +55,7 @@ class ExecutionLogService:
                 "execution_plan_file": execution_plan_file,
                 "proposed_plan_file": proposed_plan_file,
                 "status": status,
-                "created_at": datetime.now()
+                "created_at": datetime.now(UTC)
             }
 
             # Store in MongoDB

@@ -17,3 +17,11 @@ tabulate
 pymongo
 google-genai
 pydantic-settings
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+pytest-xdist
+pytest-mock
+coverage

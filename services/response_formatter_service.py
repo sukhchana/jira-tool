@@ -75,7 +75,7 @@ class ResponseFormatterService:
                     task_dict = {
                         "high_level_task": high_level_task,
                         "subtasks": [
-                            subtask.dict() if isinstance(subtask, SubTask) else subtask
+                            subtask.model_dump() if isinstance(subtask, SubTask) else subtask
                             for subtask in task.get("subtasks", [])
                         ]
                     }
@@ -169,12 +169,12 @@ class ResponseFormatterService:
             # Verify serialization before returning
             try:
                 logger.debug("Testing response serialization")
-                json.dumps(response.dict(), default=str)
+                json.dumps(response.model_dump(), default=str)
                 logger.debug("Response serialization successful")
             except Exception as e:
                 logger.error(f"Response serialization failed: {str(e)}")
                 logger.error("Inspecting response fields:")
-                for key, value in response.dict().items():
+                for key, value in response.model_dump().items():
                     try:
                         json.dumps({key: value}, default=str)
                     except Exception as e:

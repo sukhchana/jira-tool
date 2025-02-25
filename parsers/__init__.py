@@ -1,5 +1,6 @@
 from .base_parser import BaseParser
 from .code_block_parser import CodeBlockParser
+from .complexity_analysis_parser import ComplexityAnalysisParser
 from .epic_analysis_parser import EpicAnalysisParser
 from .gherkin_parser import GherkinParser
 from .research_summary_parser import ResearchSummaryParser
@@ -12,6 +13,7 @@ __all__ = [
     'BaseParser',
     'TicketDescriptionParser',
     'EpicAnalysisParser',
+    'ComplexityAnalysisParser',
     'SubtaskParser',
     'UserStoryParser',
     'TechnicalTaskParser',

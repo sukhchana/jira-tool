@@ -1,6 +1,6 @@
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 
 # Add project root to Python path when running independently
@@ -229,11 +229,11 @@ class MongoDBService:
         """Update the status of a revision"""
         update_data = {
             "status": status,
-            "updated_at": datetime.now()
+            "updated_at": datetime.now(UTC)
         }
         if accepted is not None:
             update_data["accepted"] = accepted
-            update_data["accepted_at"] = datetime.now()
+            update_data["accepted_at"] = datetime.now(UTC)
 
         result = self.revisions.update_one(
             {"revision_id": revision_id},
@@ -249,7 +249,7 @@ class MongoDBService:
         """Update a ticket in MongoDB"""
         try:
             # Add updated_at timestamp
-            update_data["updated_at"] = datetime.now()
+            update_data["updated_at"] = datetime.now(UTC)
 
             result = self.proposed_tickets.update_one(
                 {
@@ -317,7 +317,7 @@ class MongoDBService:
                 {
                     "$set": {
                         "status": status,
-                        "updated_at": datetime.now()
+                        "updated_at": datetime.now(UTC)
                     }
                 }
             )
@@ -339,7 +339,7 @@ class MongoDBService:
                 "complexity": story.get('complexity', 'Medium'),
                 "dependencies": story.get('dependencies', []),
                 "implementation_details": story.get('implementation_details', {}),
-                "created_at": datetime.now()
+                "created_at": datetime.now(UTC)
             }
 
             # Get subtasks for this story
@@ -362,7 +362,7 @@ class MongoDBService:
                 "complexity": task.get('complexity', 'Medium'),
                 "dependencies": task.get('dependencies', []),
                 "implementation_details": task.get('implementation_details', {}),
-                "created_at": datetime.now()
+                "created_at": datetime.now(UTC)
             }
 
             # Get subtasks for this task

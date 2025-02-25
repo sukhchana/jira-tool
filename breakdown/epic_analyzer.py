@@ -4,7 +4,9 @@ from loguru import logger
 
 from llm.vertexllm import VertexLLM
 from models.analysis_info import AnalysisInfo
-from parsers import TicketDescriptionParser, EpicAnalysisParser
+from models.complexity_analysis import ComplexityAnalysis
+from models.ticket_description import TicketDescription
+from parsers import TicketDescriptionParser, EpicAnalysisParser, ComplexityAnalysisParser
 from prompts.epic_prompt_builder import EpicPromptBuilder
 from prompts.ticket_prompt_builder import TicketPromptBuilder
 from services.execution_log_service import ExecutionLogService
@@ -79,22 +81,20 @@ class EpicAnalyzer:
                 stakeholders=[]
             )
 
-    def parse_ticket_description(self, response: str) -> Dict[str, Any]:
-        """Parse ticket description from LLM response"""
-        return TicketDescriptionParser.parse(response)
 
-    async def analyze_complexity(self, ticket_description: str) -> Dict[str, Any]:
+    async def analyze_complexity(self, epic_summary: str, epic_description: str) -> ComplexityAnalysis:
         """
-        Analyze the complexity of a ticket and estimate effort.
+        Analyze the complexity of an epic and estimate effort.
         
         Args:
-            ticket_description: The description of the ticket to analyze
+            epic_summary: The summary/title of the epic
+            epic_description: The description of the epic
             
         Returns:
-            Dict containing complexity analysis and raw response
+            ComplexityAnalysis containing structured analysis and metrics
         """
         try:
-            prompt = EpicPromptBuilder.build_complexity_prompt(ticket_description)
+            prompt = EpicPromptBuilder.build_complexity_prompt(epic_summary, epic_description)
             response = await self.llm.generate_content(
                 prompt,
                 temperature=0.1,
@@ -102,14 +102,24 @@ class EpicAnalyzer:
                 top_k=40
             )
 
-            return {
-                "analysis": response,
-                "raw_response": response
-            }
+            # Parse the response into structured format
+            analysis_data = ComplexityAnalysisParser.parse(response)
+            
+            # Create and return ComplexityAnalysis model
+            return ComplexityAnalysis(
+                analysis=analysis_data["analysis"],
+                raw_response=response,
+                story_points=analysis_data.get("story_points", 0),
+                complexity_level=analysis_data.get("complexity_level", "Medium"),
+                effort_estimate=analysis_data.get("effort_estimate", ""),
+                technical_factors=analysis_data.get("technical_factors", []),
+                risk_factors=analysis_data.get("risk_factors", [])
+            )
 
         except Exception as e:
-            logger.error(f"Failed to analyze ticket complexity: {str(e)}")
-            logger.error(f"Ticket description: {ticket_description}")
+            logger.error(f"Failed to analyze epic complexity: {str(e)}")
+            logger.error(f"Epic summary: {epic_summary}")
+            logger.error(f"Epic description: {epic_description}")
             raise
 
     async def generate_ticket_description(
@@ -117,7 +127,7 @@ class EpicAnalyzer:
             context: str,
             requirements: str = None,
             additional_info: Dict[str, Any] = None
-    ) -> Dict[str, str]:
+    ) -> TicketDescription:
         """
         Generate a structured ticket description using LLM.
         
@@ -127,7 +137,7 @@ class EpicAnalyzer:
             additional_info: Optional additional context
             
         Returns:
-            Dict containing structured ticket description
+            TicketDescription model containing structured ticket description
         """
         try:
             prompt = TicketPromptBuilder.build_ticket_prompt(context, requirements, additional_info)
@@ -137,7 +147,7 @@ class EpicAnalyzer:
                 top_p=0.8,
                 top_k=40
             )
-            return self.parse_ticket_description(response)
+            return TicketDescriptionParser.parse(response)
 
         except Exception as e:
             logger.error(f"Failed to generate ticket description: {str(e)}")

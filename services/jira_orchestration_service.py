@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, List
 
 from fastapi import HTTPException
@@ -179,7 +179,7 @@ class JiraOrchestrationService:
             os.makedirs("execution_plans", exist_ok=True)
 
             # Generate filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
             filename = f"execution_plans/EXECUTION_{epic_key}_{timestamp}.md"
 
             # Build the markdown content
@@ -282,7 +282,7 @@ class JiraOrchestrationService:
             "3. Verify custom fields (story points, etc.) are available",
             "4. Verify issue types (Story, Sub-task) are available",
             "",
-            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"Generated on: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}"
         ])
 
         return "\n".join(lines)

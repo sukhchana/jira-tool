@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, List
 
 import yaml
@@ -13,7 +13,7 @@ class ProposedTicketsService:
         """Initialize with epic key and execution ID"""
         self.epic_key = epic_key
         self.execution_id = execution_id
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self.filename = f"proposed_tickets/PROPOSED_{epic_key}_{timestamp}.yaml"
 
         # Initialize ID counters
@@ -31,7 +31,7 @@ class ProposedTicketsService:
         self.tickets_data = {
             "execution_id": execution_id,
             "epic_key": epic_key,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "user_stories": [],  # Separate list for user stories
             "technical_tasks": [],  # Separate list for technical tasks
             "subtasks": {}

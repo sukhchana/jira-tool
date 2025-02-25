@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 
 class Settings(BaseSettings):
@@ -9,8 +10,7 @@ class Settings(BaseSettings):
     ENABLE_IMPLEMENTATION_APPROACH: bool = True  # Tested
     ENABLE_TEST_PLANS: bool = True  # Tested
 
-    class Config:
-        env_prefix = "JIRA_TOOL_"  # Environment variables should be prefixed with JIRA_TOOL_
+    model_config = ConfigDict(env_prefix="JIRA_TOOL_")  # Environment variables should be prefixed with JIRA_TOOL_
 
 
 settings = Settings()

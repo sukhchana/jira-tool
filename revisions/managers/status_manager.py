@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 from loguru import logger
@@ -50,7 +50,7 @@ class StatusManager:
                     "revision_id": revision_id,
                     "status": status,
                     "accepted": accepted,
-                    "updated_at": datetime.now()
+                    "updated_at": datetime.now(UTC)
                 }, indent=2, cls=DateTimeEncoder)
             )
 

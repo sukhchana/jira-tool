@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, Optional
 
 from loguru import logger
@@ -60,7 +60,7 @@ class RevisionManager:
                 proposed_plan_file="",
                 execution_plan_file=self.execution_log.filename,
                 status="PENDING",
-                created_at=datetime.now(),
+                created_at=datetime.now(UTC),
                 changes_requested=changes_requested,
                 changes_interpreted=interpreted_changes
             )

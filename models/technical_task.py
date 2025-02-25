@@ -5,10 +5,14 @@ from pydantic import BaseModel, Field
 
 class ImplementationApproach(BaseModel):
     """Implementation approach details"""
-    architecture: str = Field(..., description="System architecture components and data flow")
-    apis: str = Field(..., description="Required APIs and services")
-    database: str = Field(..., description="Database changes and schema updates")
-    security: str = Field(..., description="Security considerations and requirements")
+    architecture: str = Field("Not specified", description="System architecture components and data flow")
+    apis: str = Field("Not specified", description="Required APIs and services")
+    database: str = Field("Not specified", description="Database changes and schema updates")
+    security: str = Field("Not specified", description="Security considerations and requirements")
+    third_party_services: Optional[str] = Field(None, description="Third party service dependencies")
+    data_flow: Optional[str] = Field(None, description="Data flow description")
+    dependencies: Optional[str] = Field(None, description="Technical dependencies")
+    approach: Optional[str] = Field(None, description="General implementation approach")
 
 
 class TechnicalTask(BaseModel):
