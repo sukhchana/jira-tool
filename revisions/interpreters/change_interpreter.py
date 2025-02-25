@@ -52,6 +52,8 @@ class ChangeInterpreter(BaseInterpreter):
             3. list_remove: Values to remove from list fields
             4. Only include fields that need to change
             5. Use exact field names from the current ticket
+            6. The response MUST be valid JSON within the <changes> tags
+            7. All three keys (field_updates, list_append, list_remove) MUST be included even if empty
             """
 
             response = await self.generate_interpretation(prompt)
@@ -59,14 +61,30 @@ class ChangeInterpreter(BaseInterpreter):
             # Extract the JSON from the response
             changes_match = re.search(r'<changes>\s*({.*?})\s*</changes>', response, re.DOTALL)
             if not changes_match:
-                raise ValueError("No valid changes found in response")
+                logger.error(f"No valid changes found in response, attempting to parse full response as JSON")
+                # Try to extract any JSON-like structure in the response
+                json_match = re.search(r'({.*})', response.replace('\n', ' '), re.DOTALL)
+                if json_match:
+                    try:
+                        changes = json.loads(json_match.group(1))
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse response as JSON: {response}")
+                        changes = {"field_updates": {}, "list_append": {}, "list_remove": {}}
+                else:
+                    logger.error(f"No JSON structure found in response: {response}")
+                    changes = {"field_updates": {}, "list_append": {}, "list_remove": {}}
+            else:
+                try:
+                    changes = json.loads(changes_match.group(1))
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse changes JSON: {changes_match.group(1)}")
+                    changes = {"field_updates": {}, "list_append": {}, "list_remove": {}}
 
-            changes = json.loads(changes_match.group(1))
-
-            # Validate the changes structure
+            # Ensure the changes structure has all required keys
             required_keys = ["field_updates", "list_append", "list_remove"]
-            if not all(key in changes for key in required_keys):
-                raise ValueError("Invalid changes structure")
+            for key in required_keys:
+                if key not in changes:
+                    changes[key] = {}
 
             return changes
 

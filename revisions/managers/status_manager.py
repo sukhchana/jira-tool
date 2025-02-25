@@ -4,6 +4,7 @@ from typing import Optional
 
 from loguru import logger
 
+from models.revision_record import RevisionRecord
 from services.execution_log_service import ExecutionLogService
 from services.mongodb_service import MongoDBService
 from ..models import DateTimeEncoder
@@ -35,8 +36,8 @@ class StatusManager:
             if not revision:
                 raise ValueError(f"Revision {revision_id} not found")
 
-            # Initialize execution log with the epic key from the revision
-            self._ensure_execution_log(revision.get("epic_key"))
+            # Initialize execution log with the epic key from the revision (access as attribute)
+            self._ensure_execution_log(revision.epic_key)
 
             # Update in MongoDB
             updated = self.mongodb.update_revision_status(revision_id, status, accepted)

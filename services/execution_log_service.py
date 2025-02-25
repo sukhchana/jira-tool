@@ -82,7 +82,7 @@ class ExecutionLogService:
                 # Check if content is JSON-serializable
                 try:
                     json_obj = json.loads(content) if isinstance(content, str) else content
-                    f.write(f"```json\n{json.dumps(json_obj, indent=2)}\n```\n")
+                    f.write(f"```json\n{json.dumps(json_obj, indent=2, default=str)}\n```\n")
                 except (json.JSONDecodeError, TypeError):
                     f.write(f"```\n{content}\n```\n")
         except Exception as e:

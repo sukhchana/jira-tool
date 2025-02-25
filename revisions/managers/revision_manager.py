@@ -69,10 +69,10 @@ class RevisionManager:
             revision_data = revision.model_dump()
             self.mongodb.create_revision(revision_data)
 
-            # Log the revision details
+            # Log the revision details without JSON serialization
             self.execution_log.log_section(
                 "Revision Details",
-                json.dumps(revision_data, indent=2, cls=DateTimeEncoder)
+                revision_data
             )
 
             return revision
@@ -85,6 +85,10 @@ class RevisionManager:
         """Get a revision record by ID"""
         revision_data = self.mongodb.get_revision(revision_id)
         if revision_data:
+            # Check if it's already a RevisionRecord instance
+            if isinstance(revision_data, RevisionRecord):
+                return revision_data
+            # Otherwise, create a RevisionRecord from the dictionary
             return RevisionRecord(**revision_data)
         return None
 

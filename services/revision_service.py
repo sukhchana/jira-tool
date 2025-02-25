@@ -10,6 +10,7 @@ from loguru import logger
 from revisions.handlers import TicketHandler, ChangeHandler
 from revisions.interpreters import TicketInterpreter, ChangeInterpreter
 from revisions.managers import RevisionManager, StatusManager
+from models.revision_record import RevisionRecord
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -18,6 +19,13 @@ class DateTimeEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
+        # Handle MongoDB ObjectId
+        try:
+            from bson import ObjectId
+            if isinstance(obj, ObjectId):
+                return str(obj)
+        except ImportError:
+            pass
         return super().default(obj)
 
 
@@ -46,12 +54,36 @@ class RevisionService:
         self.ticket_interpreter = TicketInterpreter()
         self.change_interpreter = ChangeInterpreter()
 
+    async def interpret_revision_request(
+            self,
+            execution_id: str,
+            ticket_id: str,
+            revision_request: str,
+            epic_key: str = None
+    ) -> str:
+        """Interpret a revision request for a ticket"""
+        try:
+            # Get the ticket data
+            ticket_data = await self.ticket_handler.get_ticket(execution_id, ticket_id, epic_key)
+            if not ticket_data:
+                raise ValueError(f"Ticket not found: {ticket_id}")
+
+            # Delegate to the ticket interpreter
+            return await self.ticket_interpreter.interpret_revision_request(
+                ticket_data=ticket_data,
+                revision_request=revision_request
+            )
+        except Exception as e:
+            logger.error(f"Failed to interpret revision request: {str(e)}")
+            raise
+
     async def create_revision(
             self,
             execution_id: str,
             ticket_id: str,
-            epic_key: str,
-            revision_request: str
+            changes_requested: str,
+            changes_interpreted: str,
+            epic_key: str
     ) -> Dict[str, Any]:
         """Create a new revision for a ticket"""
         try:
@@ -65,8 +97,7 @@ class RevisionService:
                 execution_id=execution_id,
                 ticket_id=ticket_id,
                 epic_key=epic_key,
-                ticket_data=ticket_data,
-                revision_request=revision_request
+                changes_requested=changes_requested
             )
 
             return revision
@@ -75,7 +106,7 @@ class RevisionService:
             logger.error(f"Failed to create revision: {str(e)}")
             raise
 
-    async def get_revision(self, revision_id: str) -> Optional[Dict[str, Any]]:
+    async def get_revision(self, revision_id: str) -> Optional[RevisionRecord]:
         """Get a revision by ID"""
         try:
             return await self.revision_manager.get_revision_record(revision_id)
@@ -87,14 +118,24 @@ class RevisionService:
             self,
             revision_id: str,
             status: str,
-            epic_key: str
+            accepted: Optional[bool] = None
     ) -> bool:
         """Update the status of a revision"""
         try:
+            # Get the revision to get the epic_key
+            revision = await self.get_revision(revision_id)
+            if not revision:
+                raise ValueError(f"Revision {revision_id} not found")
+
+            # Access epic_key attribute directly instead of using dict .get() method
+            epic_key = revision.epic_key
+            if not epic_key:
+                raise ValueError(f"Epic key not found in revision {revision_id}")
+
             return await self.status_manager.update_revision_status(
                 revision_id=revision_id,
                 status=status,
-                epic_key=epic_key
+                accepted=accepted
             )
         except Exception as e:
             logger.error(f"Failed to update revision status: {str(e)}")
@@ -102,34 +143,14 @@ class RevisionService:
 
     async def apply_revision_changes(
             self,
-            revision_id: str,
-            epic_key: str
-    ) -> bool:
+            revision_id: str
+    ) -> str:
         """Apply the changes from a revision to the ticket"""
         try:
-            # Get the revision
-            revision = await self.get_revision(revision_id)
-            if not revision:
-                raise ValueError(f"Revision not found: {revision_id}")
-
-            # Apply the changes
-            success = await self.change_handler.apply_changes(
-                execution_id=revision['execution_id'],
-                ticket_id=revision['ticket_id'],
-                changes=revision['interpreted_changes'],
-                epic_key=epic_key
-            )
-
-            if success:
-                # Update revision status to applied
-                await self.update_revision_status(
-                    revision_id=revision_id,
-                    status='applied',
-                    epic_key=epic_key
-                )
-
-            return success
-
+            # Forward the call to the revision manager
+            changes = await self.revision_manager.apply_revision_changes(revision_id)
+            # Convert to JSON string for RevisionResponse
+            return json.dumps(changes, cls=DateTimeEncoder, indent=2)
         except Exception as e:
             logger.error(f"Failed to apply revision changes: {str(e)}")
             raise

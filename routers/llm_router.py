@@ -1,11 +1,10 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
 from breakdown import ExecutionManager
-from breakdown.rerun_helper import RerunHelper
 from models import (
     TicketGenerationRequest,
     TicketGenerationResponse,
@@ -150,7 +149,8 @@ async def request_plan_revision(
             interpreted_changes = await revision_service.interpret_revision_request(
                 execution_id=execution_id,
                 ticket_id=ticket_id,
-                revision_request=request.revision_request
+                revision_request=request.revision_request,
+                epic_key=epic_key
             )
 
             logger.debug(f"Got interpreted changes: {interpreted_changes}")
@@ -194,9 +194,9 @@ async def request_plan_revision(
 @router.post("/confirm-revision-request/{temp_revision_id}")
 async def confirm_revision_request(
         temp_revision_id: str,
-        accept: bool = True
+        accept: bool = Query(True, description="Whether to accept or reject the revision")
 ) -> RevisionConfirmation:
-    """Confirm whether the interpreted changes are correct"""
+    """Confirm or reject a revision request"""
     try:
         # Initialize MongoDB service
         mongodb_service = MongoDBService()
@@ -209,8 +209,8 @@ async def confirm_revision_request(
                 detail=f"No revision found with ID: {temp_revision_id}"
             )
 
-        # Get epic key from the revision record
-        epic_key = revision.get("epic_key")
+        # Get epic key from the revision record - access as attribute instead of using .get()
+        epic_key = revision.epic_key
         if not epic_key:
             raise HTTPException(
                 status_code=500,
@@ -229,8 +229,8 @@ async def confirm_revision_request(
             )
 
             return RevisionConfirmation(
-                original_execution_id=revision.get("execution_id", ""),
-                interpreted_changes=revision.get("changes_interpreted", ""),
+                original_execution_id=revision.execution_id,
+                interpreted_changes=revision.changes_interpreted,
                 confirmation_required=False,
                 temp_revision_id=temp_revision_id,
                 status="ACCEPTED" if accept else "REJECTED"
@@ -271,8 +271,8 @@ async def apply_revision(
                 detail=f"No revision found with ID: {temp_revision_id}"
             )
 
-        # Check revision state
-        current_status = revision.get("status")
+        # Check revision state - access attributes directly instead of using .get()
+        current_status = revision.status
         if current_status == "APPLIED":
             raise HTTPException(
                 status_code=409,
@@ -288,12 +288,10 @@ async def apply_revision(
             # Initialize revision service
             revision_service = RevisionService()
 
-            # Apply the changes using execution_id and ticket_id from the revision record
+            # Apply the changes using the revision ID
             logger.debug("Applying revision changes...")
             changes_made = await revision_service.apply_revision_changes(
-                execution_id=revision.get("execution_id"),
-                ticket_id=revision.get("ticket_id"),
-                changes_interpreted=revision.get("changes_interpreted")
+                revision_id=temp_revision_id
             )
 
             # Update revision status to APPLIED
@@ -303,10 +301,10 @@ async def apply_revision(
             )
 
             return RevisionResponse(
-                original_execution_id=revision.get("execution_id"),
-                new_execution_id=revision.get("execution_id"),  # Same execution ID since we're modifying in place
+                original_execution_id=revision.execution_id,
+                new_execution_id=revision.execution_id,  # Same execution ID since we're modifying in place
                 changes_made=changes_made,
-                new_plan_file=revision.get("execution_plan_file")
+                new_plan_file=revision.execution_plan_file
             )
 
         except Exception as e:
@@ -369,44 +367,3 @@ async def list_executions():
             detail=f"Failed to list executions: {str(e)}"
         )
 
-
-@router.post("/rerun-subtasks/{epic_key}/{source_execution_id}", response_model=JiraEpicBreakdownResult)
-async def rerun_subtask_generation(
-        epic_key: str,
-        source_execution_id: str
-) -> JiraEpicBreakdownResult:
-    """
-    Rerun subtask generation for an epic using state from a previous execution.
-    
-    This endpoint:
-    1. Creates a new execution
-    2. Loads the epic details, analysis, and high-level tasks from the source execution
-    3. Regenerates subtasks for all high-level tasks
-    4. Returns a new breakdown result with the updated subtasks
-    
-    Args:
-        epic_key: The JIRA key of the epic
-        source_execution_id: The execution ID to load state from
-        
-    Returns:
-        A new JiraEpicBreakdownResult with regenerated subtasks
-    """
-    try:
-        logger.info(f"Rerunning subtask generation for epic {epic_key} from execution {source_execution_id}")
-        response_formatter = ResponseFormatterService()
-
-        result = await RerunHelper.rerun_subtask_generation(epic_key, source_execution_id)
-        return response_formatter.format_epic_breakdown(result.model_dump())
-
-    except FileNotFoundError as e:
-        logger.error(f"Source execution state not found: {str(e)}")
-        raise HTTPException(
-            status_code=404,
-            detail=f"Source execution state not found: {str(e)}"
-        )
-    except Exception as e:
-        logger.error(f"Failed to rerun subtask generation: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to rerun subtask generation: {str(e)}"
-        )

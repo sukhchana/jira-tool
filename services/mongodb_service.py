@@ -14,6 +14,7 @@ from models.proposed_ticket_mongo import ProposedTicketMongo
 import yaml
 from loguru import logger
 from database import MongoConnection
+from models.revision_record import RevisionRecord
 
 
 class MongoDBService:
@@ -68,13 +69,22 @@ class MongoDBService:
             acceptance_criteria = subtask.get('acceptance_criteria', [])
             if isinstance(acceptance_criteria, str):
                 acceptance_criteria = [acceptance_criteria]
+                
+            # Handle description field that might be a dictionary
+            description = subtask['description']
+            if isinstance(description, dict) and 'formatted' in description:
+                # Use the formatted description string if available
+                description = description['formatted']
+            elif isinstance(description, dict):
+                # Convert dictionary to string if no formatted field
+                description = str(description)
 
             subtask_doc = ProposedTicketMongo(
                 ticket_id=subtask['id'],
                 ticket_type='SUB_TASK',
                 parent_id=parent_id,
                 title=subtask['title'],
-                description=subtask['description'],
+                description=description,
                 acceptance_criteria=acceptance_criteria,
                 story_points=subtask.get('story_points'),
                 required_skills=subtask.get('required_skills', []),
@@ -101,16 +111,31 @@ class MongoDBService:
         Returns:
             Tuple of (ticket_id, proposal_id)
         """
+        # Handle description field that might be a dictionary
+        description = ticket_data['description']
+        if isinstance(description, dict) and 'formatted' in description:
+            # Use the formatted description string if available
+            description = description['formatted']
+        elif isinstance(description, dict):
+            # Convert dictionary to string if no formatted field
+            description = str(description)
+            
+        # Handle implementation_notes field that might be a dictionary
+        implementation_notes = ticket_data.get('implementation_notes')
+        if isinstance(implementation_notes, dict):
+            # Convert dictionary to string
+            implementation_notes = str(implementation_notes)
+
         common_fields = {
             'ticket_id': ticket_data['id'],
             'ticket_type': ticket_type,
             'parent_id': ticket_data.get('parent_id'),
             'title': ticket_data['title'],
-            'description': ticket_data['description'],
+            'description': description,
             'technical_domain': ticket_data.get('technical_domain'),
             'complexity': ticket_data.get('complexity'),
             'dependencies': ticket_data.get('dependencies', []),
-            'implementation_notes': ticket_data.get('implementation_notes'),
+            'implementation_notes': implementation_notes,
             'implementation_details': ticket_data.get('implementation_details', {}),
             'epic_key': epic_key,
             'execution_id': execution_id
@@ -221,9 +246,10 @@ class MongoDBService:
         result = self.revisions.insert_one(revision)
         return str(result.inserted_id)
 
-    def get_revision(self, revision_id: str) -> Optional[Dict[str, Any]]:
+    def get_revision(self, revision_id: str) -> Optional[RevisionRecord]:
         """Get a revision record by ID"""
-        return self.revisions.find_one({"revision_id": revision_id})
+        doc = self.revisions.find_one({"revision_id": revision_id})
+        return RevisionRecord(**doc) if doc else None
 
     def update_revision_status(self, revision_id: str, status: str, accepted: Optional[bool] = None) -> bool:
         """Update the status of a revision"""
@@ -241,9 +267,10 @@ class MongoDBService:
         )
         return result.modified_count > 0
 
-    def get_revisions_by_execution_id(self, execution_id: str) -> List[Dict[str, Any]]:
+    def get_revisions_by_execution_id(self, execution_id: str) -> List[RevisionRecord]:
         """Get all revisions for a given execution"""
-        return list(self.revisions.find({"execution_id": execution_id}))
+        cursor = self.revisions.find({"execution_id": execution_id})
+        return [RevisionRecord(**doc) for doc in cursor]
 
     def update_ticket(self, execution_id: str, ticket_id: str, update_data: Dict[str, Any]) -> bool:
         """Update a ticket in MongoDB"""
@@ -411,7 +438,7 @@ if __name__ == "__main__":
     try:
         logger.info("Starting MongoDB service test")
         service = MongoDBService()
-        yaml_file = "proposed_tickets/PROPOSED_DP-7_20250207_140330.yaml"
+        yaml_file = "proposed_tickets/PROPOSED_DP-7_20250225_194236.yaml"
 
         if not os.path.exists(yaml_file):
             logger.error(f"YAML file not found: {yaml_file}")
