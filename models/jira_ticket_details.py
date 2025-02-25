@@ -10,7 +10,7 @@ class JiraTicketDetails(BaseModel):
     description: str = Field("", description="The ticket's detailed description")
     issue_type: str = Field(..., description="The type of issue (Epic, Story, Task, etc.)")
     status: str = Field(..., description="Current status of the ticket")
-    project_key: str = Field(..., description="The key of the project this ticket belongs to")
+    project_key: str = Field("TEST", description="The key of the project this ticket belongs to")
     created: str = Field(..., description="Timestamp when the ticket was created")
     updated: str = Field(..., description="Timestamp when the ticket was last updated")
     assignee: Optional[str] = Field(None, description="Username of the assigned user")

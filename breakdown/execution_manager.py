@@ -18,7 +18,7 @@ from models.sub_task import SubTask
 from models.technical_task import TechnicalTask
 from models.user_story import UserStory
 from services.execution_log_service import ExecutionLogService
-from services.jira_service import JiraService
+from jira_integration.jira_service import JiraService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
 from .epic_analyzer import EpicAnalyzer

@@ -8,7 +8,7 @@ from models import (
     JiraTicketDetails,
     JiraProject
 )
-from services.jira_service import JiraService
+from jira_integration.jira_service import JiraService
 
 router = APIRouter()
 

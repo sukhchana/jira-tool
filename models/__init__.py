@@ -10,8 +10,12 @@ from .gherkin import GherkinStep, GherkinScenario
 from .high_level_task import HighLevelTask
 from .implementation_notes import ImplementationNotes
 from .jira_epic_breakdown_result import JiraEpicBreakdownResult
+from .jira_epic_details import JiraEpicDetails
+from .jira_epic_progress import JiraEpicProgress
+from .jira_linked_ticket import JiraLinkedTicket
 from .jira_project import JiraProject
 from .jira_task_definition import JiraTaskDefinition
+from .jira_ticket_creation import JiraTicketCreation
 from .jira_ticket_details import JiraTicketDetails
 from .metrics_info import MetricsInfo
 from .proposed_ticket_mongo import ProposedTicketMongo
@@ -63,5 +67,9 @@ __all__ = [
     'StoryDescription',
     'ImplementationNotes',
     'UserStory',
-    'ProposedTicketMongo'
+    'ProposedTicketMongo',
+    'JiraEpicDetails',
+    'JiraEpicProgress',
+    'JiraLinkedTicket',
+    'JiraTicketCreation'
 ]

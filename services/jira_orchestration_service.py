@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 from fastapi import HTTPException
 from loguru import logger
 
-from services.jira_service import JiraService
+from jira_integration.jira_service import JiraService
 
 
 class JiraOrchestrationService:

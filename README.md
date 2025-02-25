@@ -32,6 +32,15 @@ The application follows a modular, service-oriented architecture:
 5. **Utils** (`utils/`)
     - `logger.py`: Centralized logging configuration
 
+6. **JIRA Integration Module** (`jira_integration/`)
+    - `jira_service.py`: High-level JIRA service
+    - `operations/`: Core JIRA operations
+        - `base_operation.py`: Base class with REST API functionality
+        - `epic_operations.py`: Epic-specific operations
+        - `ticket_operations.py`: Ticket-specific operations
+    - `models/`: Pydantic models for JIRA data
+    - `jira_auth_helper.py`: Authentication utilities
+
 ### Architecture Flow
 
 ```mermaid
@@ -447,4 +456,116 @@ The application includes comprehensive error handling:
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
+
+# JIRA Integration
+
+This module provides a refactored JIRA integration that uses direct REST API calls instead of the JIRA Python library.
+
+## Features
+
+- Asynchronous REST API calls to JIRA using aiohttp
+- Support for common JIRA operations (issues, epics, transitions, etc.)
+- Detailed logging
+- Environment-based configuration
+
+## Usage
+
+1. Set up the environment variables:
+   ```
+   JIRA_SERVER=https://your-domain.atlassian.net
+   JIRA_EMAIL=your-email@example.com
+   JIRA_API_TOKEN=your-api-token
+   ```
+
+2. Import and use the JiraService class:
+   ```python
+   from jira_integration.jira_service import JiraService
+   
+   # Create instance
+   jira_service = JiraService()
+   
+   # Get ticket details
+   ticket = await jira_service.get_ticket("PROJECT-123")
+   
+   # Create a new ticket
+   new_ticket = await jira_service.create_ticket({
+       "project_key": "PROJECT",
+       "summary": "Test ticket",
+       "description": "This is a test ticket",
+       "issue_type": "story",
+       "epic_key": "PROJECT-E1"  # Optional
+   })
+   ```
+
+## Structure
+
+- `jira_service.py` - Main service class that provides the interface to the rest of the application
+- `operations/` - Individual operation classes for different JIRA entity types
+  - `base_operation.py` - Base class with common REST API functionality
+  - `ticket_operations.py` - Operations for stories, tasks, subtasks
+  - `epic_operations.py` - Operations for epics
+
+## Dependencies
+
+Required packages:
+- aiohttp
+- fastapi
+- loguru
+- python-dotenv
+- pydantic
+
+Install with `pip install -r requirements.txt`
+
+## Testing
+
+The project includes comprehensive unit and integration tests for the JIRA integration module.
+
+### Running Tests
+
+To run all tests:
+
+```bash
+pytest
+```
+
+To run only unit tests:
+
+```bash
+pytest -m "not integration"
+```
+
+To run only integration tests:
+
+```bash
+pytest -m "integration"
+```
+
+To generate a coverage report:
+
+```bash
+pytest --cov=jira_integration --cov-report=html
+```
+
+### Test Structure
+
+Tests are organized to mirror the module structure:
+
+```
+tests/
+│
+├── jira_integration/
+│   ├── operations/
+│   │   ├── test_base_operation.py
+│   │   ├── test_epic_operations.py
+│   │   ├── test_ticket_operations.py
+│   │
+│   ├── test_jira_service.py
+│   ├── test_jira_auth_helper.py
+│   ├── test_integration.py
+│   └── conftest.py
+│
+└── conftest.py
+```
+
+For more details on testing, see [tests/README.md](tests/README.md).
 

@@ -5,87 +5,24 @@ if __name__ != "__main__":
 import asyncio
 import os
 from typing import Dict, Any
-
-import vertexai
-from google.oauth2 import service_account
 from loguru import logger
 from vertexai.generative_models import (
     GenerativeModel,
     GenerationConfig,
-    SafetySetting,
-    HarmCategory,
-    HarmBlockThreshold,
     Tool,
     grounding
 )
-
-
-def get_safety_settings():
-    """Get permissive safety settings for Vertex AI"""
-    safety_config = [
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        ),
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        ),
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        ),
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        ),
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        ),
-        SafetySetting(
-            category=HarmCategory.HARM_CATEGORY_UNSPECIFIED,
-            threshold=HarmBlockThreshold.BLOCK_NONE,
-        )
-    ]
-    return safety_config
+from .vertexinit import initialize_vertex_ai
+from .vertexsafety import get_safety_settings
 
 
 class VertexLLM:
     """Interface for Google Cloud's Vertex AI Gemini service using the official SDK"""
 
     def __init__(self):
-        self.initialize_vertex_ai()
+        initialize_vertex_ai()
 
-    def get_credentials(self) -> service_account.Credentials:
-        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        if not credentials_path:
-            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is required")
-        return service_account.Credentials.from_service_account_file(credentials_path)
 
-    def initialize_vertex_ai(self):
-        """Initialize Vertex AI client with project and endpoint settings"""
-        try:
-            # Get configuration from environment variables
-            project_id = os.getenv('GCP_PROJECT_ID')
-            location = os.getenv('VERTEX_LOCATION', 'us-central1')
-            endpoint = os.getenv('VERTEX_API_ENDPOINT', f'{location}-aiplatform.googleapis.com')
-
-            if not project_id:
-                raise ValueError("GCP_PROJECT_ID environment variable is required")
-
-            # Initialize Vertex AI with specific configurations
-            vertexai.init(
-                project=project_id,
-                location=location,
-                api_endpoint=endpoint,
-                credentials=self.get_credentials(),
-                api_transport="rest"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to initialize Vertex AI LLM: {str(e)}")
-            raise
 
     async def generate_content(
             self,
