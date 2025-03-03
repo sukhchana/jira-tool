@@ -1,0 +1,39 @@
+2025-02-26 23:16:55.716 | DEBUG    | llm.vertexllm:generate_content:52 - Generating content with temperature=0.2
+2025-02-26 23:16:55.716 | DEBUG    | llm.vertexllm:generate_content:53 - Prompt length: 27 characters
+2025-02-26 23:16:56.959 | DEBUG    | llm.vertexllm:generate_content_with_search:110 - Generating content with Google Search grounding
+2025-02-26 23:16:56.959 | DEBUG    | llm.vertexllm:generate_content_with_search:111 - Prompt length: 60 characters
+2025-02-26 23:16:56.959 | ERROR    | llm.vertexllm:generate_content_with_search:139 - Failed to generate content with search: type object 'grounding' has no attribute 'GoogleSearch'
+2025-02-26 23:16:56.959 | ERROR    | llm.vertexllm:generate_content_with_search:140 - Prompt that caused error:
+What are the latest developments in artificial intelligence?
+2025-02-26 23:16:56.959 | ERROR    | __main__:main:18 - Error: type object 'grounding' has no attribute 'GoogleSearch'
+2025-02-26 23:17:34.715 | DEBUG    | llm.vertexllm:generate_content:52 - Generating content with temperature=0.2
+2025-02-26 23:17:34.715 | DEBUG    | llm.vertexllm:generate_content:53 - Prompt length: 27 characters
+2025-02-26 23:17:35.769 | DEBUG    | llm.vertexllm:generate_content_with_search:110 - Generating content with Google Search grounding
+2025-02-26 23:17:35.769 | DEBUG    | llm.vertexllm:generate_content_with_search:111 - Prompt length: 60 characters
+2025-02-26 23:17:35.770 | ERROR    | llm.vertexllm:generate_content_with_search:139 - Failed to generate content with search: Tool.__init__() got an unexpected keyword argument 'google_search_retrieval'
+2025-02-26 23:17:35.770 | ERROR    | llm.vertexllm:generate_content_with_search:140 - Prompt that caused error:
+What are the latest developments in artificial intelligence?
+2025-02-26 23:17:35.770 | ERROR    | __main__:main:18 - Error: Tool.__init__() got an unexpected keyword argument 'google_search_retrieval'
+2025-02-26 23:18:13.624 | DEBUG    | llm.vertexllm:generate_content:52 - Generating content with temperature=0.2
+2025-02-26 23:18:13.624 | DEBUG    | llm.vertexllm:generate_content:53 - Prompt length: 27 characters
+2025-02-26 23:18:14.275 | DEBUG    | llm.vertexllm:generate_content_with_search:110 - Generating content with Google Search grounding
+2025-02-26 23:18:14.275 | DEBUG    | llm.vertexllm:generate_content_with_search:111 - Prompt length: 60 characters
+2025-02-26 23:18:15.093 | ERROR    | llm.vertexllm:generate_content_with_search:139 - Failed to generate content with search: 400 POST https://us-central1-aiplatform.googleapis.com/v1/projects/s-chana/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?%24alt=json%3Benum-encoding%3Dint: Unable to submit request because Please use google_search field instead of google_search_retrieval field.. Learn more: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/gemini
+2025-02-26 23:18:15.093 | ERROR    | llm.vertexllm:generate_content_with_search:140 - Prompt that caused error:
+What are the latest developments in artificial intelligence?
+2025-02-26 23:18:15.093 | ERROR    | __main__:main:18 - Error: 400 POST https://us-central1-aiplatform.googleapis.com/v1/projects/s-chana/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?%24alt=json%3Benum-encoding%3Dint: Unable to submit request because Please use google_search field instead of google_search_retrieval field.. Learn more: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/gemini
+2025-02-26 23:19:48.864 | DEBUG    | llm.vertexllm:generate_content:52 - Generating content with temperature=0.2
+2025-02-26 23:19:48.864 | DEBUG    | llm.vertexllm:generate_content:53 - Prompt length: 27 characters
+2025-02-26 23:19:49.878 | DEBUG    | llm.vertexllm:generate_content_with_search:110 - Generating content with Google Search grounding
+2025-02-26 23:19:49.878 | DEBUG    | llm.vertexllm:generate_content_with_search:111 - Prompt length: 60 characters
+2025-02-26 23:19:49.878 | DEBUG    | llm.vertexllm:generate_content_with_search:115 - Using model version: gemini-2.0-flash
+2025-02-26 23:19:49.878 | DEBUG    | llm.vertexllm:generate_content_with_search:143 - Using fallback to regular content generation for Gemini 2.0
+2025-02-26 23:20:01.179 | WARNING  | llm.vertexllm:generate_content_with_search:151 - Google Search grounding is not yet supported for Gemini 2.0 in the current SDK version
+2025-02-26 23:26:18.161 | DEBUG    | llm.vertexllm:generate_content:52 - Generating content with temperature=0.2
+2025-02-26 23:26:18.161 | DEBUG    | llm.vertexllm:generate_content:53 - Prompt length: 27 characters
+2025-02-26 23:26:19.221 | DEBUG    | llm.vertexllm:generate_content_with_search:110 - Generating content with Google Search grounding
+2025-02-26 23:26:19.221 | DEBUG    | llm.vertexllm:generate_content_with_search:111 - Prompt length: 60 characters
+2025-02-26 23:26:19.982 | ERROR    | llm.vertexllm:generate_content_with_search:139 - Failed to generate content with search: 400 POST https://us-central1-aiplatform.googleapis.com/v1/projects/s-chana/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?%24alt=json%3Benum-encoding%3Dint: Unable to submit request because Please use google_search field instead of google_search_retrieval field.. Learn more: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/gemini
+2025-02-26 23:26:19.982 | ERROR    | llm.vertexllm:generate_content_with_search:140 - Prompt that caused error:
+What are the latest developments in artificial intelligence?
+2025-02-26 23:26:19.982 | ERROR    | __main__:main:18 - Error: 400 POST https://us-central1-aiplatform.googleapis.com/v1/projects/s-chana/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent?%24alt=json%3Benum-encoding%3Dint: Unable to submit request because Please use google_search field instead of google_search_retrieval field.. Learn more: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/gemini

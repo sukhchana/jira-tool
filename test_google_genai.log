@@ -1,0 +1,18 @@
+2025-02-26 23:33:09.299 | INFO     | llm.genaillm:initialize_genai:36 - Google GenAI client initialized with project: s-chana, location: us-central1
+2025-02-26 23:33:09.300 | DEBUG    | llm.genaillm:generate_content:136 - Generating content with temperature=0.7
+2025-02-26 23:33:09.300 | DEBUG    | llm.genaillm:generate_content:137 - Prompt length: 38 characters
+2025-02-26 23:33:09.300 | DEBUG    | llm.genaillm:generate_content:141 - Using model: gemini-2.0-flash
+2025-02-26 23:33:10.550 | DEBUG    | llm.genaillm:generate_content_with_search:63 - Generating content with Google Search grounding
+2025-02-26 23:33:10.550 | DEBUG    | llm.genaillm:generate_content_with_search:64 - Prompt length: 58 characters
+2025-02-26 23:33:10.550 | DEBUG    | llm.genaillm:generate_content_with_search:68 - Using model: gemini-2.0-flash
+2025-02-26 23:33:12.662 | DEBUG    | llm.genaillm:generate_content_with_search:89 - Response includes grounding metadata
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:92 - Response includes search entry point
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:94 - Search content available
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:103 - Generated response length: 296 characters
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:63 - Generating content with Google Search grounding
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:64 - Prompt length: 75 characters
+2025-02-26 23:33:12.663 | DEBUG    | llm.genaillm:generate_content_with_search:68 - Using model: gemini-2.0-flash
+2025-02-26 23:33:16.079 | DEBUG    | llm.genaillm:generate_content_with_search:89 - Response includes grounding metadata
+2025-02-26 23:33:16.079 | DEBUG    | llm.genaillm:generate_content_with_search:92 - Response includes search entry point
+2025-02-26 23:33:16.079 | DEBUG    | llm.genaillm:generate_content_with_search:94 - Search content available
+2025-02-26 23:33:16.079 | DEBUG    | llm.genaillm:generate_content_with_search:103 - Generated response length: 914 characters
