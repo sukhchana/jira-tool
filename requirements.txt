@@ -1,11 +1,11 @@
-fastapi
-uvicorn
-python-dotenv
 aiohttp
+fastapi
+loguru
+python-dotenv
 pydantic
+uvicorn
 google-cloud-aiplatform
 vertexai
-loguru
 tenacity
 tomli
 PyYAML
@@ -15,3 +15,13 @@ requests
 urllib3
 tabulate
 pymongo
+google-genai
+pydantic-settings
+
+# Testing dependencies
+pytest
+pytest-asyncio
+pytest-cov
+pytest-xdist
+pytest-mock
+coverage

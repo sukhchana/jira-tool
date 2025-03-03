@@ -1,5 +1,7 @@
-from pydantic import BaseModel
 from typing import Optional, List
+
+from pydantic import BaseModel
+
 
 class TicketCreateRequest(BaseModel):
     """Request model for creating a JIRA ticket"""
@@ -13,4 +15,4 @@ class TicketCreateRequest(BaseModel):
     acceptance_criteria: Optional[str] = None
     technical_domain: Optional[str] = None
     epic_link: Optional[str] = None
-    priority: Optional[str] = "Medium" 
+    priority: Optional[str] = "Medium"

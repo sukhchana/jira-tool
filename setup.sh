@@ -36,7 +36,63 @@ fi
 echo "Performing additional setup tasks..."
 # export SOME_ENV_VAR=some_value
 
-# Create .env file if it doesn't exist
+# Check for parent jira_tool directory
+PARENT_JIRA_TOOL="../jira_tool"
+if [ -d "$PARENT_JIRA_TOOL" ]; then
+    echo "Found parent jira_tool directory..."
+    
+    # Check for and copy .env file from parent jira_tool directory
+    if [ -f "$PARENT_JIRA_TOOL/.env" ]; then
+        echo "Found .env file in parent jira_tool directory. Copying..."
+        cp "$PARENT_JIRA_TOOL/.env" ./.env
+        echo "Copied .env file from parent directory."
+    fi
+    
+    # Check for and copy config directory
+    if [ -d "$PARENT_JIRA_TOOL/config" ]; then
+        echo "Found config directory in parent jira_tool. Copying..."
+        mkdir -p ./config
+        cp -R "$PARENT_JIRA_TOOL/config/"* ./config/
+        echo "Copied config directory from parent."
+    fi
+    
+    # Check for and copy assets directory
+    if [ -d "$PARENT_JIRA_TOOL/assets" ]; then
+        echo "Found assets directory in parent jira_tool. Copying..."
+        mkdir -p ./assets
+        cp -R "$PARENT_JIRA_TOOL/assets/"* ./assets/
+        echo "Copied assets directory from parent."
+    fi
+    
+    # Check for and copy specific files from llm directory
+    if [ -d "$PARENT_JIRA_TOOL/llm" ]; then
+        echo "Found llm directory in parent jira_tool."
+        mkdir -p ./llm
+        
+        # Check and copy specific files
+        for file in c_vertex.py m2m_helper.py vertexinit.py; do
+            if [ -f "$PARENT_JIRA_TOOL/llm/$file" ]; then
+                echo "Copying $file from parent llm directory..."
+                cp "$PARENT_JIRA_TOOL/llm/$file" ./llm/
+            fi
+        done
+        echo "Finished copying available llm files."
+    fi
+    
+    # Check for and copy jira_auth_helper.py from jira_integration folder
+    if [ -d "$PARENT_JIRA_TOOL/jira_integration" ]; then
+        echo "Found jira_integration directory in parent jira_tool."
+        
+        if [ -f "$PARENT_JIRA_TOOL/jira_integration/jira_auth_helper.py" ]; then
+            echo "Found jira_auth_helper.py in parent jira_integration directory. Copying..."
+            mkdir -p ./jira_integration
+            cp "$PARENT_JIRA_TOOL/jira_integration/jira_auth_helper.py" ./jira_integration/
+            echo "Copied jira_auth_helper.py to local jira_integration directory."
+        fi
+    fi
+fi
+
+# Create .env file if it doesn't exist (after checking parent directory)
 if [ ! -f ".env" ]; then
     echo "Creating .env file with template values..."
     cat > .env << EOL

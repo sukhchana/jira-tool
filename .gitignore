@@ -13,3 +13,4 @@ logs/
 
 # But keep the directory
 !/data/.gitkeep
+*.log
