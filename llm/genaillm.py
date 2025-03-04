@@ -33,6 +33,7 @@ class GenAILLM:
                 project=project_id,
                 location=location
             )
+            logger.info(f"Google GenAI client initialized with project: {project_id}, location: {location}")
 
         except Exception as e:
             logger.error(f"Failed to initialize Google GenAI: {str(e)}")
@@ -62,6 +63,10 @@ class GenAILLM:
             logger.debug(f"Generating content with Google Search grounding")
             logger.debug(f"Prompt length: {len(prompt)} characters")
 
+            # Get model ID from environment or use default
+            model_id = os.getenv('VERTEX_MODEL_VERSION', 'gemini-2.0-flash')
+            logger.debug(f"Using model: {model_id}")
+
             # Configure Google Search tool
             google_search_tool = Tool(
                 google_search=GoogleSearch()
@@ -69,7 +74,7 @@ class GenAILLM:
 
             # Generate content using the model with search tool
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp',
+                model=model_id,
                 contents=prompt,
                 config=GenerateContentConfig(
                     temperature=temperature,
@@ -80,18 +85,23 @@ class GenAILLM:
             )
 
             # Log if we have grounding metadata
-            if hasattr(response.candidates[0], 'grounding_metadata'):
-                logger.info("Response includes grounding metadata")
+            if hasattr(response.candidates[0], 'grounding_metadata') and response.candidates[0].grounding_metadata:
+                logger.debug("Response includes grounding metadata")
                 metadata = response.candidates[0].grounding_metadata
-                if hasattr(metadata, 'search_entry_point'):
-                    logger.info(f"Search content: {metadata.search_entry_point.rendered_content}")
+                if hasattr(metadata, 'search_entry_point') and metadata.search_entry_point:
+                    logger.debug("Response includes search entry point")
+                    if hasattr(metadata.search_entry_point, 'rendered_content'):
+                        logger.debug(f"Search content available")
 
             # Get text from all parts
             text_parts = []
             for part in response.candidates[0].content.parts:
-                text_parts.append(part.text)
+                if hasattr(part, 'text'):
+                    text_parts.append(part.text)
 
-            return "\n".join(text_parts)
+            result = "\n".join(text_parts)
+            logger.debug(f"Generated response length: {len(result)} characters")
+            return result
 
         except Exception as e:
             logger.error(f"Failed to generate content with search: {str(e)}")
@@ -126,9 +136,13 @@ class GenAILLM:
             logger.debug(f"Generating content with temperature={temperature}")
             logger.debug(f"Prompt length: {len(prompt)} characters")
 
+            # Get model ID from environment or use default
+            model_id = os.getenv('VERTEX_MODEL_VERSION', 'gemini-2.0-flash')
+            logger.debug(f"Using model: {model_id}")
+
             # Generate content using the new client interface
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp',
+                model=model_id,
                 contents=prompt,
                 config=GenerateContentConfig(
                     temperature=temperature,
@@ -139,7 +153,17 @@ class GenAILLM:
                 **kwargs
             )
 
-            return response.text
+            # Check response format and extract text
+            if hasattr(response, 'text'):
+                return response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                text_parts = []
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'text'):
+                        text_parts.append(part.text)
+                return "\n".join(text_parts)
+            else:
+                raise ValueError("Unexpected response format from the API")
 
         except Exception as e:
             logger.error(f"Failed to generate content: {str(e)}")
@@ -168,13 +192,43 @@ if __name__ == "__main__":
             # Test generation with search
             print("\nTesting generation with Google Search grounding:")
             response = await llm.generate_content_with_search(
-                "What is the latest news in the US, can you summarise the top 20 headlines over the last 48 hours?",
+                "When is the next total solar eclipse in the United States?",
                 temperature=0.0
             )
             print(response)
+            
+            # Example of how to access grounding metadata
+            print("\nRunning test with grounding metadata extraction:")
+            test_prompt = "What are the latest developments in quantum computing?"
+            print(f"Prompt: {test_prompt}")
+            
+            # Direct client access for metadata demo
+            direct_response = llm.client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=test_prompt,
+                config=GenerateContentConfig(
+                    temperature=0.0,
+                    tools=[Tool(google_search=GoogleSearch())],
+                    response_modalities=["TEXT"],
+                )
+            )
+            
+            # Print the response
+            for part in direct_response.candidates[0].content.parts:
+                if hasattr(part, 'text'):
+                    print(part.text)
+            
+            # Access grounding metadata if available
+            if hasattr(direct_response.candidates[0], 'grounding_metadata') and direct_response.candidates[0].grounding_metadata:
+                metadata = direct_response.candidates[0].grounding_metadata
+                if hasattr(metadata, 'search_entry_point') and metadata.search_entry_point:
+                    if hasattr(metadata.search_entry_point, 'rendered_content'):
+                        print("\nGrounding Metadata (Search Content):")
+                        print(metadata.search_entry_point.rendered_content)
 
         except Exception as e:
             logger.error(f"Test failed: {str(e)}")
+            print(f"Error: {str(e)}")
             raise
 
 
@@ -183,6 +237,7 @@ if __name__ == "__main__":
     print("Make sure you have set these environment variables:")
     print("- GCP_PROJECT_ID")
     print("- VERTEX_LOCATION (optional, defaults to us-central1)")
+    print("- VERTEX_MODEL_VERSION (optional, defaults to gemini-2.0-flash)")
     print("\nRunning tests...")
 
     asyncio.run(test_llm())

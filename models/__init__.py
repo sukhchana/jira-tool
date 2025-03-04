@@ -1,4 +1,5 @@
 from .analysis_info import AnalysisInfo
+from .architecture_design import ArchitectureDesignRequest, ArchitectureDesignResponse, DiagramInfo
 from .breakdown_info import BreakdownInfo
 from .code_block import CodeBlock
 from .complexity_analysis_request import ComplexityAnalysisRequest
@@ -35,6 +36,9 @@ from .user_story import UserStory
 
 __all__ = [
     'AnalysisInfo',
+    'ArchitectureDesignRequest',
+    'ArchitectureDesignResponse',
+    'DiagramInfo',
     'JiraTaskDefinition',
     'ExecutionPlanStats',
     'ProposedTickets',

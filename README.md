@@ -569,3 +569,97 @@ tests/
 
 For more details on testing, see [tests/README.md](tests/README.md).
 
+# Viewing Mermaid Diagrams Offline
+
+This repository contains tools to help you view and convert Mermaid diagrams when your VS Code plugin isn't working.
+
+## Option 1: HTML Viewer (No Installation Required)
+
+The `mermaid_viewer.html` file is a standalone HTML page that allows you to:
+- Load markdown files containing Mermaid diagrams
+- Paste Mermaid code directly
+- Render the diagrams in your browser
+- Save diagrams as SVG or PNG files
+- **NEW!** Support for AWS and GCP architecture icons
+
+**How to use:**
+1. Open `mermaid_viewer.html` in any modern web browser
+2. Load your markdown file or paste your Mermaid code
+3. Click "Render Diagram" to view
+4. Use the "Save as SVG" or "Save as PNG" buttons to export
+
+### Cloud Architecture Icons
+
+The viewer now supports AWS and GCP architecture icons through the Iconify icon pack. Use them in your diagrams with:
+
+```
+service myService(logos:aws-lambda)[AWS Lambda Function]
+```
+
+Common cloud icons:
+- `logos:aws-lambda` - AWS Lambda
+- `logos:aws-s3` - AWS S3
+- `logos:aws-ec2` - AWS EC2
+- `logos:aws-dynamodb` - AWS DynamoDB
+- `logos:google-cloud` - Google Cloud
+- `logos:kubernetes` - Kubernetes
+
+For more icons, visit the [Iconify Logos Collection](https://icon-sets.iconify.design/logos/).
+
+### Accessing via FastAPI
+
+The viewer is also integrated with the FastAPI application for convenient access:
+
+1. Start the application:
+   ```bash
+   python main.py
+   ```
+
+2. Access the viewer through these URLs:
+   - `/mermaid-viewer` - Direct access via dedicated endpoint
+   - `/static/mermaid_viewer.html` - Access via static file server
+
+This allows you to view Mermaid diagrams while using the rest of the application's features!
+
+## Option 2: Python Converter Script
+
+The `mermaid_converter.py` script extracts Mermaid diagrams from markdown files and converts them to PNG or SVG images.
+
+**Requirements:**
+- Python 3
+- Node.js
+- mermaid-cli package
+
+**Installation:**
+```bash
+# Install Node.js dependencies
+npm install -g @mermaid-js/mermaid-cli
+```
+
+**Usage:**
+```bash
+# Convert diagrams in a markdown file to PNG
+python mermaid_converter.py path/to/architecture_file.md
+
+# Convert to SVG with custom output directory
+python mermaid_converter.py path/to/architecture_file.md --format svg --output-dir ./my_diagrams
+```
+
+## Option 3: Online Mermaid Editor
+
+If you have internet access, you can use the Mermaid Live Editor:
+- Go to https://mermaid.live/
+- Paste your Mermaid code
+- Download as PNG, SVG or other formats
+
+## Option 4: Browser Extensions
+
+Several browser extensions can render Mermaid diagrams in GitHub or other markdown contexts:
+- Markdown Diagrams (Chrome)
+- Mermaid Diagrams (Firefox)
+
+## Additional Resources
+
+- [Mermaid Documentation](https://mermaid-js.github.io/mermaid/#/)
+- [Mermaid CLI GitHub](https://github.com/mermaid-js/mermaid-cli)
+

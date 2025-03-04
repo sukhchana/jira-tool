@@ -110,28 +110,58 @@ class VertexLLM:
             logger.debug(f"Generating content with Google Search grounding")
             logger.debug(f"Prompt length: {len(prompt)} characters")
 
-            # Create Google Search grounding tool
-            search_tool = Tool.from_google_search_retrieval(
-                grounding.GoogleSearchRetrieval()
-            )
-
+            # Get the model version from environment variable
+            model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
+            logger.debug(f"Using model version: {model_version}")
+            
+            # Initialize the model
+            self.model = GenerativeModel(model_version)
+            
             # Configure generation parameters
             generation_config = GenerationConfig(
                 temperature=temperature,
                 candidate_count=1,
                 **kwargs
             )
-
-            model_version = os.getenv('VERTEX_MODEL_VERSION', 'gemini-1.5-pro')
-            self.model = GenerativeModel(model_version)
-
-            # Generate content using the model with search grounding
-            response = self.model.generate_content(
-                prompt,
-                generation_config=generation_config,
-                tools=[search_tool],
-                safety_settings=get_safety_settings()
-            )
+            
+            # For Gemini 1.5 models, use the standard approach with GoogleSearchRetrieval
+            if "gemini-1.5" in model_version:
+                logger.debug("Using GoogleSearchRetrieval for Gemini 1.5")
+                search_tool = Tool.from_google_search_retrieval(
+                    grounding.GoogleSearchRetrieval()
+                )
+                
+                # Generate content using the model with search grounding
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    tools=[search_tool],
+                    safety_settings=get_safety_settings()
+                )
+            # For Gemini 2.0 models, we need to use a different approach
+            elif "gemini-2.0" in model_version:
+                logger.debug("Using fallback to regular content generation for Gemini 2.0")
+                # For now, fall back to regular content generation without search
+                # until the SDK is updated to support the new google_search field
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    safety_settings=get_safety_settings()
+                )
+                logger.warning("Google Search grounding is not yet supported for Gemini 2.0 in the current SDK version")
+            else:
+                logger.debug("Using GoogleSearchRetrieval for default model")
+                search_tool = Tool.from_google_search_retrieval(
+                    grounding.GoogleSearchRetrieval()
+                )
+                
+                # Generate content using the model with search grounding
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    tools=[search_tool],
+                    safety_settings=get_safety_settings()
+                )
 
             return response.text
 

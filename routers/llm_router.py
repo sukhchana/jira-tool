@@ -13,12 +13,15 @@ from models import (
     JiraEpicBreakdownResult,
     RevisionRequest,
     RevisionConfirmation,
-    RevisionResponse
+    RevisionResponse,
+    ArchitectureDesignRequest,
+    ArchitectureDesignResponse
 )
 from services.jira_orchestration_service import JiraOrchestrationService
 from services.mongodb_service import MongoDBService
 from services.response_formatter_service import ResponseFormatterService
 from services.revision_service import RevisionService
+from services.architecture_design_service import ArchitectureDesignService
 
 router = APIRouter()
 
@@ -107,6 +110,66 @@ async def create_epic_subtasks(
         breakdown["created_jira_tasks"] = created_tasks
 
     return breakdown
+
+
+@router.post(
+    "/design-architecture/",
+    response_model=ArchitectureDesignResponse,
+    status_code=200,
+    summary="Design architecture for a JIRA epic",
+    description="Generate architecture design with mermaid diagrams for an epic"
+)
+async def design_architecture(
+    epic_key: str,
+    cloud_provider: str,
+    additional_context: str = None
+) -> ArchitectureDesignResponse:
+    """
+    Design architecture for a JIRA epic with mermaid diagrams.
+    
+    This endpoint generates an architecture design based on the requirements in a JIRA epic.
+    It creates various mermaid diagrams (architecture, sequence, system design) and saves
+    the result as a markdown file.
+    
+    Args:
+        epic_key: JIRA epic key
+        cloud_provider: Cloud provider (AWS or GCP)
+        additional_context: Additional context for the architecture design
+        
+    Returns:
+        Architecture design response with diagrams and file path
+        
+    Raises:
+        HTTPException: If architecture design generation fails
+    """
+    try:
+        logger.info(f"Received request to design architecture for epic: {epic_key}")
+        logger.debug(f"Cloud provider: {cloud_provider}")
+        
+        # Initialize architecture design service
+        architecture_service = ArchitectureDesignService()
+        
+        # Generate architecture design
+        response = await architecture_service.generate_architecture_design(
+            epic_key=epic_key,
+            cloud_provider=cloud_provider,
+            additional_context=additional_context
+        )
+        
+        return response
+        
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(
+            status_code=400,
+            detail=str(ve)
+        )
+    except Exception as e:
+        logger.error(f"Failed to design architecture for epic {epic_key}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to design architecture: {str(e)}"
+        )
 
 
 @router.post("/revise-plan/{execution_id}/ticket/{ticket_id}")
@@ -365,5 +428,50 @@ async def list_executions():
         raise HTTPException(
             status_code=500,
             detail=f"Failed to list executions: {str(e)}"
+        )
+
+
+@router.get(
+    "/debug/architectures",
+    summary="Debug endpoint to list architecture designs",
+    description="Lists all architecture design files"
+)
+async def list_architectures():
+    """List all architecture design files for debugging"""
+    try:
+        architectures_dir = "architectures"
+        designs = []
+
+        if os.path.exists(architectures_dir):
+            for filename in os.listdir(architectures_dir):
+                if filename.startswith("ARCHITECTURE_") and filename.endswith(".md"):
+                    filepath = os.path.join(architectures_dir, filename)
+                    stat = os.stat(filepath)
+
+                    # Parse filename for metadata (format: ARCHITECTURE_EPIC-KEY_CLOUDPROVIDER_timestamp.md)
+                    parts = filename.split('_')
+                    if len(parts) > 3:
+                        epic_key = parts[1]
+                        cloud_provider = parts[2]
+                        timestamp = parts[3].replace('.md', '')
+
+                        designs.append({
+                            "filename": filename,
+                            "epic_key": epic_key,
+                            "cloud_provider": cloud_provider,
+                            "created_at": timestamp,
+                            "file_size": stat.st_size,
+                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+                        })
+
+        return {
+            "architectures": sorted(designs, key=lambda x: x["created_at"], reverse=True)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list architectures: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list architectures: {str(e)}"
         )
 
