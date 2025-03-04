@@ -1,0 +1,26 @@
+{
+  "main_objective": "Implement OAuth 2.0 authentication and integrate with Enterprise Active Directory via Ping Federate to enable secure machine-to-machine and human-to-machine access for a Python-based application.",
+  "technical_domains": [
+    "OAuth 2.0 Implementation:**",
+    "Best Practices:  Use a well-vetted OAuth 2.0 library (e.g., Authlib, requests-oauthlib).  Implement proper grant types (e.g., authorization code grant for human users, client credentials grant for machine-to-machine).  Enforce proper token validation and revocation.  Implement refresh tokens for long-lived sessions.",
+    "OpenID Connect (OIDC) Integration:**",
+    "Best Practices:  Use an OIDC client library to handle the authentication flow and token validation.  Properly configure the OIDC client with the Ping Federate discovery endpoint.  Securely store and manage the client secret.  Validate the ID token signature.",
+    "Active Directory Integration:**",
+    "Best Practices:  Leverage Ping Federate's capabilities to manage the connection to Active Directory.  Configure Ping Federate to map AD attributes to OIDC claims.  Avoid direct LDAP queries from the Python application if possible, relying on Ping Federate as the intermediary.",
+    "Python Development:**",
+    "Best Practices:  Use a modern Python framework (e.g., Flask, Django) to structure the application.  Follow secure coding practices to prevent vulnerabilities such as injection attacks and cross-site scripting (XSS).  Use a dependency management tool (e.g., pipenv, poetry) to manage project dependencies.  Implement proper logging and error handling."
+  ],
+  "core_requirements": [
+    "Implement OAuth 2.0 authentication for both machine-to-machine and human-to-machine interactions.",
+    "Integrate with the existing Enterprise Active Directory to authenticate human users.",
+    "Utilize OpenID Connect to retrieve user details from Active Directory via Ping Federate, including specifying which AD attributes map to application user properties (e.g., user ID).",
+    "Develop a Python-based solution that leverages appropriate libraries and frameworks."
+  ],
+  "stakeholders": [
+    "Application Users (human and machine)",
+    "Security Team",
+    "IT Operations/Infrastructure Team",
+    "Development Team",
+    "Active Directory Administrators"
+  ]
+}

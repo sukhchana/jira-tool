@@ -1,0 +1,22 @@
+{
+  "main_objective": "Implement OAuth 2.0 authentication and integrate it with the existing Enterprise Active Directory using Ping Federate, supporting both machine-to-machine and human-to-machine authentication, while leveraging OpenID Connect for user identity information.",
+  "technical_domains": [
+    "OAuth 2.0 Implementation:** Best practices include using a well-vetted library like `Authlib` or `requests-oauthlib` in Python.  Implement PKCE (Proof Key for Code Exchange) for public clients (e.g., mobile apps or single-page applications).  Properly handle refresh tokens and access tokens.  Consider using JWT (JSON Web Tokens) for access tokens.",
+    "OpenID Connect (OIDC):**  OIDC builds on OAuth 2.0 and provides a standardized way to retrieve user profile information.  Use a library that supports OIDC discovery to automatically configure the client.  Carefully map the claims returned by Ping Federate to the application's user model.",
+    "Active Directory Integration:**  Determine the best method for accessing Active Directory information via Ping Federate.  This might involve configuring Ping Federate to act as an OIDC provider that sources user data from AD.  Alternatively, if direct access to AD is required (less likely with Ping Federate in place), consider using `python-ldap` or the Microsoft Graph API (if AD is synchronized with Azure AD).",
+    "Ping Federate Integration:**  Thoroughly understand the Ping Federate configuration and capabilities.  Work with the IT Operations team to configure Ping Federate as an OAuth 2.0 authorization server and OIDC provider.  Obtain the necessary client credentials and endpoints.  Leverage Ping Federate's documentation and support resources."
+  ],
+  "core_requirements": [
+    "Implement OAuth 2.0 authentication for both machine-to-machine and human-to-machine scenarios.",
+    "Integrate with the existing Enterprise Active Directory to source user details.",
+    "Utilize OpenID Connect to retrieve user information (user ID, etc.) from Active Directory via Ping Federate.",
+    "Develop a Python-based solution that interacts with Ping Federate for authentication and authorization."
+  ],
+  "stakeholders": [
+    "Application Users (both human and machine)",
+    "Security Team",
+    "IT Operations/Infrastructure Team (responsible for Active Directory and Ping Federate)",
+    "Development Team",
+    "Product Owner/Manager"
+  ]
+}

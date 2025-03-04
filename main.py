@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+import multiprocessing
+import os
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -62,12 +64,39 @@ async def http_exception_handler(request, exc):
     )
 
 
+def calculate_workers():
+    """Calculate the optimal number of workers based on CPU count."""
+    cpu_count = multiprocessing.cpu_count()
+    workers_per_core = int(os.getenv("WORKERS_PER_CORE", "2"))
+    workers = (workers_per_core * cpu_count) + 1
+    
+    # Allow override via environment variable
+    return int(os.getenv("WORKERS", workers))
+
+
 if __name__ == "__main__":
-    logger.info("Initializing JIRA Ticket Creator API")
+    # Get configuration from environment variables with sensible defaults
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    workers = calculate_workers()  # Use the calculate_workers function
+    reload = os.getenv("RELOAD", "true").lower() == "true"
+    log_level = os.getenv("LOG_LEVEL", "debug").lower()
+    
+    # Use environment variable to determine if we should use multiple workers
+    if workers > 1:
+        logger.info(f"Starting with {workers} workers")
+    else:
+        logger.info(f"Starting with single worker")
+        
+    if reload:
+        logger.info("Auto-reload enabled")
+    
+    # Start Uvicorn with the specified settings
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="debug"
+        host=host,
+        port=port,
+        workers=workers,
+        reload=reload,
+        log_level=log_level
     )

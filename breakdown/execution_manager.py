@@ -25,6 +25,10 @@ from .epic_analyzer import EpicAnalyzer
 from .subtask_generator import SubtaskGenerator
 from .technical_task_generator import TechnicalTaskGenerator
 from .user_story_generator import UserStoryGenerator
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
+from functools import partial
 
 
 class ExecutionManager:
@@ -206,6 +210,86 @@ class ExecutionManager:
         self._save_state(f"{task_type}_subtasks.json", [subtask.model_dump() for subtask in subtasks])
         return subtasks
 
+    async def generate_subtasks_parallel(
+            self,
+            high_level_tasks: List[Union[UserStory, TechnicalTask]],
+            epic_details: JiraTicketDetails,
+            task_tracker: TaskTracker,
+            task_type: str,
+            max_parallel: int = None
+    ) -> List[SubTask]:
+        """
+        Break down high-level tasks into detailed subtasks in parallel.
+        
+        This method processes multiple high-level tasks concurrently to speed up
+        the breakdown process.
+
+        Args:
+            high_level_tasks: List of user stories or technical tasks to break down
+            epic_details: The parent epic's details from JIRA
+            task_tracker: Service for tracking generated tasks
+            task_type: Type of tasks being broken down ("user_story" or "technical_task")
+            max_parallel: Maximum number of tasks to process in parallel (defaults to CPU count)
+
+        Returns:
+            List of generated SubTask objects
+
+        Raises:
+            Exception: If subtask generation fails or state cannot be saved
+        """
+        if not high_level_tasks:
+            return []
+            
+        # Determine the number of workers based on CPU count and task size
+        if max_parallel is None:
+            max_parallel = min(multiprocessing.cpu_count(), len(high_level_tasks))
+        max_parallel = max(1, min(max_parallel, len(high_level_tasks)))
+        
+        logger.info(f"Breaking down {len(high_level_tasks)} {task_type}s with {max_parallel} parallel workers")
+        
+        # Prepare the epic details once
+        epic_details_dict = epic_details.model_dump()
+        
+        # Process tasks in chunks
+        all_subtasks = []
+        
+        # We'll use semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(max_parallel)
+        
+        async def process_task(task):
+            async with semaphore:
+                try:
+                    logger.info(f"Processing task in parallel: {task.title}")
+                    # For each task, create a list of one task
+                    task_list = [task]
+                    # Use the existing break_down_tasks method
+                    task_subtasks = await self.subtask_generator.break_down_tasks(
+                        task_list,
+                        epic_details_dict,
+                        task_tracker,
+                        self.proposed_tickets
+                    )
+                    logger.info(f"Completed breakdown for {task.title} - generated {len(task_subtasks)} subtasks")
+                    return task_subtasks
+                except Exception as e:
+                    logger.error(f"Error breaking down task {task.title}: {str(e)}")
+                    # Don't fail all tasks if one fails
+                    return []
+        
+        # Create tasks for all high-level tasks
+        tasks = [process_task(task) for task in high_level_tasks]
+        
+        # Run all tasks and gather results
+        results = await asyncio.gather(*tasks)
+        
+        # Flatten the results
+        for subtask_list in results:
+            all_subtasks.extend(subtask_list)
+            
+        # Save the combined results
+        self._save_state(f"{task_type}_subtasks.json", [subtask.model_dump() for subtask in all_subtasks])
+        return all_subtasks
+
     def _save_state(self, filename: str, data: Any) -> None:
         """
         Save execution state data to a JSON file.
@@ -310,8 +394,8 @@ class ExecutionManager:
                 user_stories = await self.generate_user_stories(epic_analysis, task_tracker)
                 all_tasks.extend(user_stories)
 
-                # Generate subtasks for user stories
-                user_story_subtasks = await self.generate_subtasks(
+                # Generate subtasks for user stories in parallel
+                user_story_subtasks = await self.generate_subtasks_parallel(
                     user_stories,
                     epic_details,
                     task_tracker,
@@ -326,8 +410,8 @@ class ExecutionManager:
                 )
                 all_tasks.extend(technical_tasks)
 
-                # Generate subtasks for technical tasks
-                technical_task_subtasks = await self.generate_subtasks(
+                # Generate subtasks for technical tasks in parallel
+                technical_task_subtasks = await self.generate_subtasks_parallel(
                     technical_tasks,
                     epic_details,
                     task_tracker,

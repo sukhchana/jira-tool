@@ -1,0 +1,850 @@
+[
+  {
+    "id": "USER-STORY-1",
+    "title": "User Story - Configure Ping Federate as OAuth 2.0 Authorization Server",
+    "type": "User Story",
+    "description": {
+      "role": "IT Operations/Infrastructure Team",
+      "goal": "Configure Ping Federate to act as an OAuth 2.0 authorization server and OIDC provider, integrated with Active Directory.",
+      "benefit": "Enables secure authentication and authorization for applications using enterprise identity management.",
+      "formatted": "As an IT Operations/Infrastructure Team member, I want to configure Ping Federate to act as an OAuth 2.0 authorization server and OIDC provider, integrated with Active Directory, so that applications can securely authenticate and authorize users using enterprise identity management."
+    },
+    "technical_domain": "Ping Federate Integration",
+    "complexity": "High",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Ping Federate Administration",
+      "Active Directory Administration",
+      "OAuth 2.0",
+      "OIDC"
+    ],
+    "suggested_assignee": "Infrastructure Engineer",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "",
+      "success_metrics": "",
+      "similar_implementations": "",
+      "modern_approaches": "",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "xml",
+        "description": "Example of configuring an Authentication Policy in PingFederate to use Active Directory as an identity store.  This assumes you've already configured a Data Store connection to Active Directory.",
+        "code": "<!-- Authentication Policy Fragment -->\n<AuthenticationPolicy name=\"ADAuthenticationPolicy\">\n  <Description>Authenticates users against Active Directory.</Description>\n  <PolicyActions>\n    <Action type=\"DATASTORE_LOOKUP\">\n      <DataStoreRef>ActiveDirectoryDataStore</DataStoreRef>\n      <SearchFilter>(&(objectClass=user)(sAMAccountName=${username}))</SearchFilter>\n      <AttributeContract>\n        <Attribute name=\"userPrincipalName\"/>\n        <Attribute name=\"displayName\"/>\n        <Attribute name=\"memberOf\"/>\n      </AttributeContract>\n    </Action>\n    <Action type=\"USERNAME_PASSWORD_AUTHENTICATION\">\n      <DataStoreRef>ActiveDirectoryDataStore</DataStoreRef>\n      <Username>${username}</Username>\n      <Password>${password}</Password>\n    </Action>\n    <Action type=\"ATTRIBUTE_MAPPING\">\n      <AttributeSource type=\"DATASTORE\">\n        <DataStoreRef>ActiveDirectoryDataStore</DataStoreRef>\n        <AttributeContract>\n          <Attribute name=\"userPrincipalName\"/>\n          <Attribute name=\"displayName\"/>\n          <Attribute name=\"memberOf\"/>\n        </AttributeContract>\n      </AttributeSource>\n      <AttributeMapping>\n        <Mapping source=\"userPrincipalName\" target=\"sub\"/>\n        <Mapping source=\"displayName\" target=\"name\"/>\n        <Mapping source=\"memberOf\" target=\"groups\"/>\n      </AttributeMapping>\n    </Action>\n  </PolicyActions>\n</AuthenticationPolicy>"
+      },
+      {
+        "language": "json",
+        "description": "Example of a Client Registration request to create a new OAuth 2.0 client in PingFederate.  This demonstrates setting the redirect URIs, grant types, and response types.",
+        "code": "{\n  \"client_id\": \"\",\n  \"client_secret\": \"\",\n  \"client_name\": \"My Application\",\n  \"redirect_uris\": [\n    \"https://myapp.example.com/callback\",\n    \"https://myapp.example.com/login\"\n  ],\n  \"grant_types\": [\n    \"authorization_code\",\n    \"refresh_token\",\n    \"client_credentials\"\n  ],\n  \"response_types\": [\n    \"code\",\n    \"token\",\n    \"id_token\"\n  ],\n  \"token_endpoint_auth_method\": \"client_secret_basic\",\n  \"scope\": [\n    \"openid\",\n    \"profile\",\n    \"email\"\n  ],\n  \"subject_type\": \"pairwise\",\n  \"id_token_signed_response_alg\": \"RS256\",\n  \"userinfo_signed_response_alg\": \"RS256\"\n}"
+      },
+      {
+        "language": "python",
+        "description": "Python code demonstrating how to handle errors when making a request to the PingFederate token endpoint.  This includes checking for common OAuth 2.0 error codes.",
+        "code": "import requests\nimport json\n\nTOKEN_ENDPOINT = \"https://your-pingfederate-server/as/token.oauth2\"\nCLIENT_ID = \"your_client_id\"\nCLIENT_SECRET = \"your_client_secret\"\n\ndef get_token(authorization_code, redirect_uri):\n    data = {\n        'grant_type': 'authorization_code',\n        'code': authorization_code,\n        'redirect_uri': redirect_uri\n    }\n    headers = {\n        'Content-Type': 'application/x-www-form-urlencoded'\n    }\n    auth = (CLIENT_ID, CLIENT_SECRET)\n\n    try:\n        response = requests.post(TOKEN_ENDPOINT, data=data, headers=headers, auth=auth)\n        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)\n        token_data = response.json()\n        return token_data\n    except requests.exceptions.HTTPError as e:\n        print(f\"HTTP Error: {e}\")\n        try:\n            error_response = response.json()\n            if 'error' in error_response:\n                error_code = error_response['error']\n                error_description = error_response.get('error_description', 'No description provided')\n                print(f\"OAuth Error: {error_code} - {error_description}\")\n                # Handle specific OAuth errors (e.g., invalid_grant, invalid_client)\n                if error_code == 'invalid_grant':\n                    print(\"Invalid authorization code or refresh token.\")\n                elif error_code == 'invalid_client':\n                    print(\"Invalid client credentials.\")\n                # ... other error handling ...\n            else:\n                print(\"Unexpected error format from token endpoint.\")\n        except json.JSONDecodeError:\n            print(\"Failed to decode JSON error response.\")\n        return None\n    except requests.exceptions.RequestException as e:\n        print(f\"Request Exception: {e}\")\n        return None\n\n# Example usage (replace with actual values)\nauthorization_code = \"YOUR_AUTHORIZATION_CODE\"\nredirect_uri = \"https://myapp.example.com/callback\"\n\ntoken_data = get_token(authorization_code, redirect_uri)\n\nif token_data:\n    print(\"Token data received:\", token_data)\nelse:\n    print(\"Failed to retrieve token.\")"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Ping Federate Configuration as OAuth 2.0 Authorization Server and OIDC Provider with Active Directory Integration",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is installed and running on a designated server."
+          },
+          {
+            "keyword": "And",
+            "text": "Active Directory is accessible from the Ping Federate server."
+          },
+          {
+            "keyword": "When",
+            "text": "I configure Ping Federate as an OAuth 2.0 authorization server."
+          },
+          {
+            "keyword": "And",
+            "text": "I configure Ping Federate as an OIDC provider."
+          },
+          {
+            "keyword": "And",
+            "text": "I integrate Ping Federate with Active Directory for user authentication and attribute retrieval."
+          },
+          {
+            "keyword": "And",
+            "text": "I create a client application configuration with appropriate grant types and scopes."
+          },
+          {
+            "keyword": "And",
+            "text": "I generate client credentials (client ID and client secret)."
+          },
+          {
+            "keyword": "And",
+            "text": "I configure the application to use the generated client credentials and endpoints."
+          },
+          {
+            "keyword": "Then",
+            "text": "The application successfully authenticates users against Active Directory via Ping Federate."
+          },
+          {
+            "keyword": "And",
+            "text": "The application receives a valid access token and ID token."
+          },
+          {
+            "keyword": "And",
+            "text": "User attributes are correctly retrieved from Active Directory and included in the ID token."
+          },
+          {
+            "keyword": "And",
+            "text": "Configuration documentation is generated and stored securely."
+          }
+        ]
+      },
+      {
+        "name": "Failed Active Directory Integration due to Incorrect Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is installed and running."
+          },
+          {
+            "keyword": "When",
+            "text": "I attempt to integrate Ping Federate with Active Directory using incorrect credentials."
+          },
+          {
+            "keyword": "Then",
+            "text": "The Active Directory integration fails."
+          },
+          {
+            "keyword": "And",
+            "text": "An error message is logged in Ping Federate indicating authentication failure against Active Directory."
+          },
+          {
+            "keyword": "And",
+            "text": "The configuration is not saved."
+          }
+        ]
+      },
+      {
+        "name": "Client Authentication Failure due to Invalid Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is configured as an OAuth 2.0 authorization server and OIDC provider."
+          },
+          {
+            "keyword": "And",
+            "text": "A client application is configured with a client ID and secret."
+          },
+          {
+            "keyword": "When",
+            "text": "The application attempts to authenticate using an invalid client ID or secret."
+          },
+          {
+            "keyword": "Then",
+            "text": "The authentication request is rejected by Ping Federate."
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate returns an 'invalid_client' error."
+          },
+          {
+            "keyword": "And",
+            "text": "The error is logged in Ping Federate's audit logs."
+          }
+        ]
+      },
+      {
+        "name": "Authorization Code Grant Flow Performance Under Load",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is configured as an OAuth 2.0 authorization server and OIDC provider."
+          },
+          {
+            "keyword": "And",
+            "text": "A client application is configured to use the authorization code grant flow."
+          },
+          {
+            "keyword": "When",
+            "text": "500 concurrent users attempt to authenticate via the authorization code grant flow within a 5-minute period."
+          },
+          {
+            "keyword": "Then",
+            "text": "The average authentication response time is less than 500 milliseconds."
+          },
+          {
+            "keyword": "And",
+            "text": "The error rate is less than 1%."
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate's CPU utilization remains below 70%."
+          }
+        ]
+      },
+      {
+        "name": "Secure Storage of Client Secrets",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is configured as an OAuth 2.0 authorization server and OIDC provider."
+          },
+          {
+            "keyword": "When",
+            "text": "I create a new client application configuration."
+          },
+          {
+            "keyword": "Then",
+            "text": "The client secret is stored securely in Ping Federate's configuration store, using encryption."
+          },
+          {
+            "keyword": "And",
+            "text": "The client secret is not displayed in plain text in the Ping Federate administrative interface after initial creation."
+          },
+          {
+            "keyword": "And",
+            "text": "Access to the client secret is restricted to authorized administrators only."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-2",
+    "title": "User Story - Implement OAuth 2.0 Client for Machine-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application (Machine)",
+      "goal": "Authenticate with Ping Federate using client credentials grant type to access protected resources.",
+      "benefit": "Enables secure access to resources without human intervention.",
+      "formatted": "As an Application (Machine), I want to authenticate with Ping Federate using client credentials grant type to access protected resources, so that I can securely access resources without human intervention."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "Authlib/requests-oauthlib",
+      "OAuth 2.0",
+      "REST APIs"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [
+      "User Story - Configure Ping Federate as OAuth 2.0 Authorization Server"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "",
+      "success_metrics": "",
+      "similar_implementations": "",
+      "modern_approaches": "",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Core functionality: Obtaining an access token using client credentials grant with Authlib.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\n\n# Load configuration from environment variables (best practice for security)\nCLIENT_ID = os.environ.get('OAUTH_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('OAUTH_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('OAUTH_TOKEN_ENDPOINT')\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT]):\n    raise ValueError(\"Missing required environment variables for OAuth configuration.\")\n\n# Create an OAuth2Session client\nclient = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n\n# Define the scope (optional, but good practice to limit access)\nscope = ['read', 'write']\n\n# Obtain the access token using client credentials grant\ntry:\n    token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials', scope=scope)\n    print(\"Access token obtained successfully:\", token)\nexcept Exception as e:\n    print(f\"Error obtaining access token: {e}\")\n    token = None\n\n# Example usage (if token was obtained)\nif token:\n    ACCESS_TOKEN = token['access_token']\n    # Now you can use ACCESS_TOKEN to access protected resources\n    print(\"Access token value:\", ACCESS_TOKEN)"
+      },
+      {
+        "language": "python",
+        "description": "Integration point: Accessing a protected resource using the obtained access token.",
+        "code": "import requests\nimport os\n\n# Assuming you have the ACCESS_TOKEN from the previous example\nACCESS_TOKEN = os.environ.get('ACCESS_TOKEN') # Load from env for security\nPROTECTED_RESOURCE_URL = os.environ.get('PROTECTED_RESOURCE_URL')\n\nif not all([ACCESS_TOKEN, PROTECTED_RESOURCE_URL]):\n    raise ValueError(\"Missing required environment variables for accessing protected resource.\")\n\n# Create the authorization header\nheaders = {'Authorization': f'Bearer {ACCESS_TOKEN}'}\n\n# Make the request to the protected resource\ntry:\n    response = requests.get(PROTECTED_RESOURCE_URL, headers=headers)\n    response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\n    print(\"Successfully accessed protected resource:\", response.json())\nexcept requests.exceptions.HTTPError as errh:\n    print(f\"HTTP Error: {errh}\")\nexcept requests.exceptions.ConnectionError as errc:\n    print(f\"Connection Error: {errc}\")\nexcept requests.exceptions.Timeout as errt:\n    print(f\"Timeout Error: {errt}\")\nexcept requests.exceptions.RequestException as err:\n    print(f\"Other Error: {err}\")"
+      },
+      {
+        "language": "python",
+        "description": "Error handling and edge cases: Handling token expiration and authentication failures.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\nimport time\n\nCLIENT_ID = os.environ.get('OAUTH_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('OAUTH_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('OAUTH_TOKEN_ENDPOINT')\nPROTECTED_RESOURCE_URL = os.environ.get('PROTECTED_RESOURCE_URL')\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, PROTECTED_RESOURCE_URL]):\n    raise ValueError(\"Missing required environment variables.\")\n\n# Function to fetch or refresh the token\ndef get_token():\n    token = None\n    try:\n        client = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n        token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n        # Store the token and expiration time (example: in memory)\n        get_token.token_data = token\n        get_token.expires_at = time.time() + token['expires_in']\n        print(\"Token fetched/refreshed successfully.\")\n    except Exception as e:\n        print(f\"Error fetching token: {e}\")\n    return token\n\nget_token.token_data = None # Initialize\nget_token.expires_at = 0 # Initialize\n\n# Function to access the protected resource with token refresh\ndef access_protected_resource():\n    if get_token.token_data is None or time.time() > get_token.expires_at:\n        print(\"Token expired or not available, refreshing...\")\n        token = get_token()\n        if token is None:\n            print(\"Failed to refresh token, cannot access resource.\")\n            return\n    else:\n        token = get_token.token_data\n\n    headers = {'Authorization': f'Bearer {token['access_token']}'}\n\n    try:\n        response = requests.get(PROTECTED_RESOURCE_URL, headers=headers)\n        response.raise_for_status()\n        print(\"Successfully accessed protected resource:\", response.json())\n    except requests.exceptions.HTTPError as errh:\n        print(f\"HTTP Error: {errh}\")\n    except requests.exceptions.ConnectionError as errc:\n        print(f\"Connection Error: {errc}\")\n    except requests.exceptions.Timeout as errt:\n        print(f\"Timeout Error: {errt}\")\n    except requests.exceptions.RequestException as err:\n        print(f\"Other Error: {err}\")\n\n# Example usage\naccess_protected_resource()\n# Simulate token expiration\ntime.sleep(5) # Assuming token expires quickly for demonstration\naccess_protected_resource()"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Authentication and Resource Access",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has valid client credentials configured"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured as the OAuth 2.0 authorization server"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token using the client credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a valid access token from Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application can use the access token to successfully access a protected resource"
+          },
+          {
+            "keyword": "And",
+            "text": "the protected resource returns a 200 OK status code"
+          }
+        ]
+      },
+      {
+        "name": "Authentication Failure with Invalid Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has invalid client credentials configured"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured as the OAuth 2.0 authorization server"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token using the client credentials grant type"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an error response from Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the error response indicates 'invalid_client' or 'unauthorized_client'"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the authentication failure"
+          }
+        ]
+      },
+      {
+        "name": "Access Token Expiration and Refresh",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has a valid access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token is nearing expiration"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to access a protected resource with the expiring access token"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application automatically refreshes the access token using the refresh token (if available)"
+          },
+          {
+            "keyword": "And",
+            "text": "the application successfully accesses the protected resource with the new access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application stores the new access token and refresh token (if provided)"
+          }
+        ]
+      },
+      {
+        "name": "Rate Limiting on Token Endpoint",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application is configured to authenticate with Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "the application makes multiple rapid requests for access tokens"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application does not exceed the rate limit configured on Ping Federate's token endpoint"
+          },
+          {
+            "keyword": "And",
+            "text": "the application handles rate limiting responses gracefully (e.g., retries with exponential backoff)"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs rate limiting events"
+          }
+        ]
+      },
+      {
+        "name": "Secure Storage of Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application is configured to authenticate with Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "the application starts up"
+          },
+          {
+            "keyword": "Then",
+            "text": "the client credentials are not stored in plain text in the application's configuration files or code"
+          },
+          {
+            "keyword": "And",
+            "text": "the client credentials are retrieved from a secure storage mechanism (e.g., environment variables, secrets management system)"
+          },
+          {
+            "keyword": "And",
+            "text": "access to the secure storage mechanism is restricted to authorized personnel and processes"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-3",
+    "title": "User Story - Implement OAuth 2.0 Client for Human-to-Machine Authentication with OIDC",
+    "type": "User Story",
+    "description": {
+      "role": "Application User (Human)",
+      "goal": "Authenticate with Ping Federate using authorization code grant with PKCE and retrieve user information via OIDC.",
+      "benefit": "Allows users to securely access the application and provides user profile information.",
+      "formatted": "As an Application User (Human), I want to authenticate with Ping Federate using authorization code grant with PKCE and retrieve user information via OIDC, so that I can securely access the application and the application can access my profile information."
+    },
+    "technical_domain": "OpenID Connect (OIDC)",
+    "complexity": "High",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "Authlib/requests-oauthlib",
+      "OAuth 2.0",
+      "OIDC",
+      "PKCE",
+      "Frontend Development (e.g., React, Angular, Vue.js)"
+    ],
+    "suggested_assignee": "Full Stack Developer",
+    "dependencies": [
+      "User Story - Configure Ping Federate as OAuth 2.0 Authorization Server"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "",
+      "success_metrics": "",
+      "similar_implementations": "",
+      "modern_approaches": "",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates the core OAuth 2.0 client functionality using Authlib, including PKCE code generation, authorization URL construction, token exchange, and ID token parsing.",
+        "code": "from authlib.integrations.flask_client import OAuth\nfrom flask import Flask, redirect, session, url_for, render_template\nimport os\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Configuration - Replace with your actual values\nOAUTH2_CLIENT_ID = 'your_client_id'\nOAUTH2_CLIENT_SECRET = 'your_client_secret'\nOAUTH2_AUTHORIZATION_ENDPOINT = 'https://your.pingfederate.com/as/authorization.oauth2'\nOAUTH2_TOKEN_ENDPOINT = 'https://your.pingfederate.com/as/token.oauth2'\nOAUTH2_USERINFO_ENDPOINT = 'https://your.pingfederate.com/idp/userinfo.openid'\nOAUTH2_REDIRECT_URI = 'http://localhost:5000/callback'\n\noauth = OAuth(app)\noauth.register(\n    name='pingfederate',\n    client_id=OAUTH2_CLIENT_ID,\n    client_secret=OAUTH2_CLIENT_SECRET,\n    authorize_url=OAUTH2_AUTHORIZATION_ENDPOINT,\n    token_endpoint=OAUTH2_TOKEN_ENDPOINT,\n    userinfo_endpoint=OAUTH2_USERINFO_ENDPOINT,\n    client_kwargs={'scope': 'openid profile email'},\n)\n\n@app.route('/')\ndef index():\n    return render_template('index.html', user=session.get('user'))\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('callback', _external=True)\n    return oauth.pingfederate.authorize_redirect(redirect_uri)\n\n@app.route('/callback')\ndef callback():\n    try:\n        token = oauth.pingfederate.authorize_access_token()\n        userinfo = oauth.pingfederate.userinfo(token=token)\n        session['user'] = userinfo\n        return redirect(url_for('index'))\n    except Exception as e:\n        return f\"Authentication failed: {str(e)}\", 500\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    return redirect(url_for('index'))\n\nif __name__ == '__main__':\n    app.run(debug=True)"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates error handling during token exchange and user info retrieval.  It also shows how to handle token expiration and refresh (though refresh token handling is simplified for brevity).",
+        "code": "from authlib.integrations.flask_client import OAuth\nfrom flask import Flask, redirect, session, url_for, render_template, request\nimport os\nimport time\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Configuration - Replace with your actual values\nOAUTH2_CLIENT_ID = 'your_client_id'\nOAUTH2_CLIENT_SECRET = 'your_client_secret'\nOAUTH2_AUTHORIZATION_ENDPOINT = 'https://your.pingfederate.com/as/authorization.oauth2'\nOAUTH2_TOKEN_ENDPOINT = 'https://your.pingfederate.com/as/token.oauth2'\nOAUTH2_USERINFO_ENDPOINT = 'https://your.pingfederate.com/idp/userinfo.openid'\nOAUTH2_REDIRECT_URI = 'http://localhost:5000/callback'\n\noauth = OAuth(app)\noauth.register(\n    name='pingfederate',\n    client_id=OAUTH2_CLIENT_ID,\n    client_secret=OAUTH2_CLIENT_SECRET,\n    authorize_url=OAUTH2_AUTHORIZATION_ENDPOINT,\n    token_endpoint=OAUTH2_TOKEN_ENDPOINT,\n    userinfo_endpoint=OAUTH2_USERINFO_ENDPOINT,\n    client_kwargs={'scope': 'openid profile email offline_access'},\n)\n\n@app.route('/')\ndef index():\n    user = session.get('user')\n    if user:\n        # Check if token is expired (simplified check)\n        if user.get('expires_at', 0) < time.time():\n            try:\n                # Attempt to refresh the token (simplified)\n                token = oauth.pingfederate.refresh_token(refresh_token=user['refresh_token'])\n                user['access_token'] = token['access_token']\n                user['expires_at'] = time.time() + token['expires_in']\n                session['user'] = user\n            except Exception as e:\n                print(f\"Token refresh failed: {e}\")\n                return redirect(url_for('login')) # Force re-login\n\n    return render_template('index.html', user=user)\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('callback', _external=True)\n    return oauth.pingfederate.authorize_redirect(redirect_uri)\n\n@app.route('/callback')\ndef callback():\n    try:\n        token = oauth.pingfederate.authorize_access_token(request)\n        userinfo = oauth.pingfederate.userinfo(token=token['access_token'])\n        user = userinfo\n        user['access_token'] = token['access_token']\n        user['refresh_token'] = token.get('refresh_token') # Store refresh token\n        user['expires_at'] = time.time() + token['expires_in'] # Store expiration time\n        session['user'] = user\n        return redirect(url_for('index'))\n    except Exception as e:\n        print(f\"Authentication failed: {e}\")\n        return f\"Authentication failed: {str(e)}\", 500\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    return redirect(url_for('index'))\n\nif __name__ == '__main__':\n    app.run(debug=True)"
+      },
+      {
+        "language": "html",
+        "description": "A simple HTML template for displaying user information and login/logout links.",
+        "code": "<!DOCTYPE html>\n<html>\n<head>\n    <title>OAuth 2.0 Client</title>\n</head>\n<body>\n    <h1>OAuth 2.0 Client</h1>\n\n    {% if user %}\n        <p>Welcome, {{ user.name }} ({{ user.email }})!</p>\n        <a href=\"/logout\">Logout</a>\n    {% else %}\n        <a href=\"/login\">Login with Ping Federate</a>\n    {% endif %}\n</body>\n</html>"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Authentication with Authorization Code Grant and PKCE",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is not authenticated"
+          },
+          {
+            "keyword": "When",
+            "text": "the user navigates to the application's login page"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application redirects the user to Ping Federate for authentication"
+          },
+          {
+            "keyword": "And",
+            "text": "the application generates a code verifier and code challenge using PKCE"
+          },
+          {
+            "keyword": "When",
+            "text": "the user successfully authenticates with Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate redirects the user back to the application with an authorization code"
+          },
+          {
+            "keyword": "And",
+            "text": "the application exchanges the authorization code for an access token and ID token using the code verifier"
+          },
+          {
+            "keyword": "And",
+            "text": "the application validates the ID token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application retrieves user information from the ID token (e.g., user ID, email)"
+          },
+          {
+            "keyword": "And",
+            "text": "the application successfully logs the user in"
+          },
+          {
+            "keyword": "And",
+            "text": "the user can access protected resources using the access token"
+          }
+        ]
+      },
+      {
+        "name": "Authentication Failure due to Invalid Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is not authenticated"
+          },
+          {
+            "keyword": "When",
+            "text": "the user navigates to the application's login page"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application redirects the user to Ping Federate for authentication"
+          },
+          {
+            "keyword": "And",
+            "text": "the application generates a code verifier and code challenge using PKCE"
+          },
+          {
+            "keyword": "When",
+            "text": "the user enters invalid credentials in Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate displays an authentication error message"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate redirects the user back to the application with an error code"
+          },
+          {
+            "keyword": "And",
+            "text": "the application displays an appropriate error message to the user"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is not logged in"
+          }
+        ]
+      },
+      {
+        "name": "Authorization Code Exchange Failure due to Invalid Code Verifier",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is redirected back to the application with an authorization code"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to exchange the authorization code for an access token with an invalid code verifier"
+          },
+          {
+            "keyword": "Then",
+            "text": "the token endpoint returns an error"
+          },
+          {
+            "keyword": "And",
+            "text": "the application displays an appropriate error message to the user"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is not logged in"
+          }
+        ]
+      },
+      {
+        "name": "Token Refresh and Accessing Protected Resources After Token Expiration",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is successfully logged in and has an access token and refresh token"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token has expired"
+          },
+          {
+            "keyword": "When",
+            "text": "the user attempts to access a protected resource"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application automatically uses the refresh token to obtain a new access token and refresh token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application successfully accesses the protected resource with the new access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the old access token is invalidated"
+          }
+        ]
+      },
+      {
+        "name": "Accessibility - Login Page is Accessible",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is using a screen reader"
+          },
+          {
+            "keyword": "When",
+            "text": "the user navigates to the application's login page"
+          },
+          {
+            "keyword": "Then",
+            "text": "the screen reader can correctly announce all elements on the page, including labels, input fields, and buttons"
+          },
+          {
+            "keyword": "And",
+            "text": "the user can navigate the login flow using the keyboard"
+          },
+          {
+            "keyword": "And",
+            "text": "the contrast ratio of text and background colors meets accessibility standards"
+          },
+          {
+            "keyword": "And",
+            "text": "error messages are clearly announced and easily understandable by the screen reader"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-4",
+    "title": "User Story - Securely Store and Manage OAuth 2.0 Client Credentials",
+    "type": "User Story",
+    "description": {
+      "role": "Security Team",
+      "goal": "Establish a secure method for storing and managing OAuth 2.0 client credentials used by the application.",
+      "benefit": "Protects sensitive information and prevents unauthorized access to resources.",
+      "formatted": "As a Security Team member, I want to establish a secure method for storing and managing OAuth 2.0 client credentials used by the application, so that sensitive information is protected and unauthorized access to resources is prevented."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Security Best Practices",
+      "Secret Management (e.g., HashiCorp Vault, AWS Secrets Manager)",
+      "Infrastructure as Code (e.g., Terraform, Ansible)"
+    ],
+    "suggested_assignee": "Security Engineer",
+    "dependencies": [
+      "User Story - Implement OAuth 2.0 Client for Machine-to-Machine Authentication",
+      "User Story - Implement OAuth 2.0 Client for Human-to-Machine Authentication with OIDC"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "",
+      "success_metrics": "",
+      "similar_implementations": "",
+      "modern_approaches": "",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates retrieving OAuth 2.0 client credentials from AWS Secrets Manager using boto3.  Includes error handling for common issues like missing secrets or access denied.",
+        "code": "import boto3\nimport json\nimport os\n\nclass SecretManager:\n    def __init__(self, region_name=None):\n        self.region_name = region_name or os.environ.get('AWS_REGION', 'us-east-1')\n        self.client = boto3.client('secretsmanager', region_name=self.region_name)\n\n    def get_secret(self, secret_name):\n        try:\n            response = self.client.get_secret_value(SecretId=secret_name)\n        except self.client.exceptions.ResourceNotFoundException:\n            print(f\"The secret {secret_name} was not found.\")\n            return None\n        except self.client.exceptions.InvalidRequestException as e:\n            print(f\"Invalid request for secret {secret_name}: {e}\")\n            return None\n        except self.client.exceptions.DecryptionFailure:\n            print(f\"Unable to decrypt secret {secret_name}.\")\n            return None\n        except Exception as e:\n            print(f\"Unexpected error retrieving secret {secret_name}: {e}\")\n            return None\n        else:\n            if 'SecretString' in response:\n                secret = response['SecretString']\n                try:\n                    return json.loads(secret)\n                except json.JSONDecodeError:\n                    print(f\"Secret {secret_name} is not valid JSON. Returning raw string.\")\n                    return secret\n            else:\n                decoded_binary_secret = base64.b64decode(response['SecretBinary'])\n                return decoded_binary_secret\n\n# Example usage:\nif __name__ == '__main__':\n    import base64\n    secret_name = 'oauth2-client-credentials'\n    secrets_manager = SecretManager()\n    credentials = secrets_manager.get_secret(secret_name)\n\n    if credentials:\n        print(f\"Successfully retrieved credentials for {secret_name}\")\n        print(f\"Client ID: {credentials.get('client_id')}\")\n        print(f\"Client Secret: {credentials.get('client_secret')}\")\n    else:\n        print(f\"Failed to retrieve credentials for {secret_name}\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates integrating the secret retrieval with an OAuth2 client library (requests-oauthlib).  Shows how to use the retrieved credentials to obtain an access token.",
+        "code": "from requests_oauthlib import OAuth2Session\nfrom oauthlib.oauth2 import BackendApplicationClient\n\n# Assuming you have a SecretManager class as defined in the previous example\nfrom secret_manager import SecretManager\n\ndef get_oauth2_token(token_url, client_id, client_secret):\n    client = BackendApplicationClient(client_id=client_id)\n    oauth = OAuth2Session(client=client)\n    token = oauth.fetch_token(token_url=token_url, client_id=client_id, client_secret=client_secret)\n    return token\n\nif __name__ == '__main__':\n    secret_name = 'oauth2-client-credentials'\n    secrets_manager = SecretManager()\n    credentials = secrets_manager.get_secret(secret_name)\n\n    if credentials:\n        client_id = credentials.get('client_id')\n        client_secret = credentials.get('client_secret')\n        token_url = credentials.get('token_url')\n\n        if not all([client_id, client_secret, token_url]):\n            print(\"Missing required credentials in secret.\")\n        else:\n            try:\n                token = get_oauth2_token(token_url, client_id, client_secret)\n                print(f\"Successfully obtained access token: {token}\")\n            except Exception as e:\n                print(f\"Failed to obtain access token: {e}\")\n    else:\n        print(f\"Failed to retrieve credentials for {secret_name}\")"
+      },
+      {
+        "language": "terraform",
+        "description": "Demonstrates how to create a secret in AWS Secrets Manager using Terraform.  Includes setting up a rotation schedule (though the rotation lambda is a placeholder).",
+        "code": "resource \"aws_secretsmanager_secret\" \"oauth2_client_credentials\" {\n  name                    = \"oauth2-client-credentials\"\n  description             = \"OAuth 2.0 client credentials for machine-to-machine authentication\"\n  recovery_window_in_days = 7\n\n  tags = {\n    Environment = \"Production\"\n    Application = \"MyApplication\"\n  }\n}\n\nresource \"aws_secretsmanager_secret_version\" \"oauth2_client_credentials_version\" {\n  secret_id     = aws_secretsmanager_secret.oauth2_client_credentials.id\n  secret_string = jsonencode({\n    client_id     = \"your_client_id\"\n    client_secret = \"your_client_secret\"\n    token_url     = \"https://example.com/oauth/token\"\n  })\n}\n\n# Placeholder for the rotation lambda function.  Replace with your actual lambda.\n# resource \"aws_lambda_function\" \"secret_rotation_lambda\" {\n#   # ... your lambda configuration ...\n# }\n\n# resource \"aws_secretsmanager_rotation_configuration\" \"oauth2_client_credentials_rotation\" {\n#   rotation_rules {\n#     automatically_after_days = 30\n#   }\n#   secret_id                = aws_secretsmanager_secret.oauth2_client_credentials.id\n#   rotation_lambda_arn      = aws_lambda_function.secret_rotation_lambda.arn\n# }\n\noutput \"secret_arn\" {\n  value = aws_secretsmanager_secret.oauth2_client_credentials.arn\n}"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successfully Store and Retrieve OAuth 2.0 Client Credentials from Vault",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A secure secret management solution (e.g., HashiCorp Vault) is configured and running."
+          },
+          {
+            "keyword": "And",
+            "text": "An OAuth 2.0 client application exists with a client ID and secret."
+          },
+          {
+            "keyword": "When",
+            "text": "The client credentials (client ID and secret) are stored in Vault with appropriate access controls."
+          },
+          {
+            "keyword": "And",
+            "text": "The application attempts to retrieve the client credentials from Vault using its assigned role."
+          },
+          {
+            "keyword": "Then",
+            "text": "The application successfully retrieves the client credentials from Vault."
+          },
+          {
+            "keyword": "And",
+            "text": "The client credentials are not stored in plain text within the application's configuration or code."
+          }
+        ]
+      },
+      {
+        "name": "Unauthorized Access Attempt to OAuth 2.0 Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A secure secret management solution (e.g., AWS Secrets Manager) is configured and running."
+          },
+          {
+            "keyword": "And",
+            "text": "OAuth 2.0 client credentials are stored in Secrets Manager with restricted access."
+          },
+          {
+            "keyword": "When",
+            "text": "An unauthorized user or application attempts to access the client credentials."
+          },
+          {
+            "keyword": "Then",
+            "text": "The access attempt is denied by Secrets Manager."
+          },
+          {
+            "keyword": "And",
+            "text": "An audit log entry is created recording the failed access attempt, including the user/application attempting access and the timestamp."
+          }
+        ]
+      },
+      {
+        "name": "Credential Rotation Policy Enforcement",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A credential rotation policy is configured for the OAuth 2.0 client credentials in the secret management solution."
+          },
+          {
+            "keyword": "And",
+            "text": "The rotation policy is set to rotate the credentials every 30 days."
+          },
+          {
+            "keyword": "When",
+            "text": "The rotation policy is triggered."
+          },
+          {
+            "keyword": "Then",
+            "text": "The client credentials are automatically rotated by the secret management solution."
+          },
+          {
+            "keyword": "And",
+            "text": "The application is automatically updated with the new client credentials (e.g., via a service discovery mechanism or configuration update)."
+          },
+          {
+            "keyword": "And",
+            "text": "The old client credentials are revoked and no longer valid."
+          }
+        ]
+      },
+      {
+        "name": "Secret Management Solution Unavailable",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A secure secret management solution (e.g., HashiCorp Vault) is configured and running."
+          },
+          {
+            "keyword": "And",
+            "text": "OAuth 2.0 client credentials are stored in Vault."
+          },
+          {
+            "keyword": "When",
+            "text": "The secret management solution becomes temporarily unavailable."
+          },
+          {
+            "keyword": "And",
+            "text": "The application attempts to retrieve the client credentials."
+          },
+          {
+            "keyword": "Then",
+            "text": "The application gracefully handles the unavailability of the secret management solution."
+          },
+          {
+            "keyword": "And",
+            "text": "The application logs an error indicating the failure to retrieve credentials."
+          },
+          {
+            "keyword": "And",
+            "text": "The application attempts to retry retrieving the credentials after a short delay."
+          }
+        ]
+      },
+      {
+        "name": "Performance of Credential Retrieval",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "A secure secret management solution (e.g., AWS Secrets Manager) is configured and running."
+          },
+          {
+            "keyword": "And",
+            "text": "OAuth 2.0 client credentials are stored in Secrets Manager."
+          },
+          {
+            "keyword": "When",
+            "text": "The application retrieves the client credentials from Secrets Manager."
+          },
+          {
+            "keyword": "Then",
+            "text": "The retrieval time is less than 200 milliseconds."
+          },
+          {
+            "keyword": "And",
+            "text": "The retrieval process does not introduce significant latency to the application's authentication flow."
+          }
+        ]
+      }
+    ]
+  }
+]

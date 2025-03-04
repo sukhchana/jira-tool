@@ -1,0 +1,22 @@
+{
+  "main_objective": "Implement OAuth 2.0 authentication for both machine-to-machine and human-to-machine interactions, integrating with the existing Enterprise Active Directory via OpenID Connect and leveraging the existing Ping Federate OAuth 2.0 server, within a Python-based project.",
+  "technical_domains": [
+    "OAuth 2.0 Implementation (with Python):** Best practices include using a well-maintained library like `Authlib` or `requests-oauthlib`.  Implement proper token storage (e.g., using a secure database or session management) and validation.  Follow the principle of least privilege when requesting scopes.  Implement refresh token rotation for enhanced security.",
+    "OpenID Connect (OIDC) Integration:** Best practices include using a dedicated OIDC library (e.g., `Flask-OIDC` for Flask applications).  Validate the ID token signature and claims.  Use the `nonce` parameter to prevent replay attacks.  Properly handle user session management after successful authentication.",
+    "Active Directory Integration (with Python):** Best practices include using the `python-ldap` library.  Securely store the Active Directory credentials used for querying.  Implement proper error handling and logging.  Optimize queries to minimize the impact on Active Directory performance.  Consider using a caching mechanism to reduce the number of Active Directory queries.",
+    "Ping Federate Configuration:** Best practices include understanding Ping Federate's configuration options for OAuth 2.0 and OIDC.  Properly configure client applications in Ping Federate.  Define appropriate scopes and claims.  Ensure that Ping Federate is configured to trust the application.  Monitor Ping Federate logs for errors and security events."
+  ],
+  "core_requirements": [
+    "Implement OAuth 2.0 authentication for machine-to-machine interactions.",
+    "Implement OAuth 2.0 authentication for human-to-machine interactions, leveraging existing Active Directory identities.",
+    "Integrate with the existing Ping Federate OAuth 2.0 server.",
+    "Define and document the mapping between Active Directory attributes and application user fields (e.g., user ID)."
+  ],
+  "stakeholders": [
+    "Application Users (both human and machine)",
+    "IT Security Team",
+    "Application Development Team",
+    "Active Directory Administrators",
+    "Ping Federate Administrators"
+  ]
+}

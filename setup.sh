@@ -36,14 +36,14 @@ fi
 echo "Performing additional setup tasks..."
 # export SOME_ENV_VAR=some_value
 
-# Check for parent jira_tool directory
-PARENT_JIRA_TOOL="../jira_tool"
+# Check for parent jira-tool directory
+PARENT_JIRA_TOOL="../jira-tool"
 if [ -d "$PARENT_JIRA_TOOL" ]; then
-    echo "Found parent jira_tool directory..."
+    echo "Found parent jira-tool directory..."
     
-    # Check for and copy .env file from parent jira_tool directory
+    # Check for and copy .env file from parent jira-tool directory
     if [ -f "$PARENT_JIRA_TOOL/.env" ]; then
-        echo "Found .env file in parent jira_tool directory. Copying..."
+        echo "Found .env file in parent jira-tool directory. Copying..."
         cp "$PARENT_JIRA_TOOL/.env" ./.env
         echo "Copied .env file from parent directory."
     fi

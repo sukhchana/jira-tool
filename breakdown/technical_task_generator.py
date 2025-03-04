@@ -1,4 +1,6 @@
 from typing import Dict, Any, List
+import asyncio
+from asyncio import Semaphore
 
 from loguru import logger
 
@@ -19,6 +21,7 @@ from services.execution_log_service import ExecutionLogService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
 from utils.config import settings
+from utils.json_sanitizer import JSONSanitizer
 
 
 class TechnicalTaskGenerator:
@@ -80,23 +83,78 @@ class TechnicalTaskGenerator:
             parsed_tasks = TechnicalTaskParser.parse_from_response(response)
             logger.info(f"Successfully parsed {len(parsed_tasks)} technical tasks")
 
-            for idx, task_dict in enumerate(parsed_tasks, 1):
+            # Enrich and process technical tasks in parallel
+            enriched_tasks = await self._enrich_technical_tasks_parallel(parsed_tasks, prompt, response)
+            
+            # Add enriched tasks to tracking systems and the result list
+            for task in enriched_tasks:
+                task_title = task.title
+                
+                # Add to tracking systems
+                logger.info(f"Adding {task_title} to task tracker and proposed tickets")
+                task_tracker.add_technical_task(task.model_dump())
+                task_id = proposed_tickets.add_high_level_task(task.model_dump())
+                task.id = task_id
+                
+                # Add to tasks list
+                tasks.append(task)
+                
+                # Log the task generation
+                logger.info(f"Successfully completed generation of {task_title}")
+                self.execution_log.log_llm_interaction(
+                    f"Technical Task Generation - {task.title}",
+                    prompt,
+                    response,
+                    {"technical_task": task.model_dump()}
+                )
+
+            logger.info(f"Completed technical task generation. Generated {len(tasks)} tasks")
+            return tasks
+
+        except Exception as e:
+            logger.error(f"Failed to generate technical tasks: {str(e)}")
+            logger.exception("Full traceback:")
+            raise
+            
+    async def _enrich_technical_tasks_parallel(
+            self, 
+            parsed_tasks: List[Dict[str, Any]], 
+            prompt: str, 
+            response: str, 
+            max_concurrency: int = 4
+    ) -> List[TechnicalTask]:
+        """
+        Enrich multiple technical tasks with additional details in parallel.
+        
+        Args:
+            parsed_tasks: List of parsed technical task dictionaries
+            prompt: The original prompt used to generate the tasks
+            response: The LLM response containing the tasks
+            max_concurrency: Maximum number of concurrent enrichment operations
+            
+        Returns:
+            List of enriched TechnicalTask objects
+        """
+        # Use a semaphore to limit concurrency
+        semaphore = Semaphore(max_concurrency)
+        
+        async def enrich_task(task_dict: Dict[str, Any], idx: int) -> TechnicalTask:
+            async with semaphore:
+                task_title = task_dict.get("title", f"Task #{idx}")
+                logger.info(f"Processing technical task {idx}/{len(parsed_tasks)} in parallel: {task_title}")
+                
                 try:
-                    task_title = task_dict.get("title", f"Task #{idx}")
-                    logger.info(f"Processing technical task {idx}/{len(parsed_tasks)}: {task_title}")
-
-                    # Generate additional components
-                    logger.info(f"Generating research summary for {task_title}")
-                    research_summary = await self._generate_research_summary(task_dict)
-
-                    logger.info(f"Generating code examples for {task_title}")
-                    code_blocks = await self._generate_code_examples(task_dict)
-                    logger.debug(f"Generated {len(code_blocks)} code examples")
-
-                    logger.info(f"Generating Gherkin scenarios for {task_title}")
-                    scenarios = await self._generate_gherkin_scenarios(task_dict)
-                    logger.debug(f"Generated {len(scenarios)} Gherkin scenarios")
-
+                    # Generate additional components in parallel
+                    research_summary, code_blocks, scenarios = await asyncio.gather(
+                        self._generate_research_summary(task_dict),
+                        self._generate_code_examples(task_dict),
+                        self._generate_gherkin_scenarios(task_dict)
+                    )
+                    
+                    logger.debug(f"Generated research summary for {task_title}")
+                    logger.debug(f"Generated {len(code_blocks)} code examples for {task_title}")
+                    logger.debug(f"Generated {len(scenarios)} Gherkin scenarios for {task_title}")
+                    
                     # Create TechnicalTask model
                     logger.info(f"Creating complete technical task model for {task_title}")
                     task = TechnicalTask(
@@ -118,61 +176,78 @@ class TechnicalTaskGenerator:
                         ),
                         acceptance_criteria=task_dict.get("acceptance_criteria", []),
                         performance_impact=task_dict.get("performance_impact",
-                                                         "No significant performance impact expected"),
+                                                     "No significant performance impact expected"),
                         scalability_considerations=task_dict.get("scalability_considerations",
-                                                                 "No specific scalability considerations identified"),
+                                                             "No specific scalability considerations identified"),
                         monitoring_needs=task_dict.get("monitoring_needs", "Standard application monitoring"),
                         testing_requirements=task_dict.get("testing_requirements", "Standard unit and integration tests"),
                         research_summary=research_summary,
                         code_blocks=code_blocks,
                         scenarios=scenarios
                     )
-
-                    # Add to tracking systems
-                    logger.info(f"Adding {task_title} to task tracker and proposed tickets")
-                    task_tracker.add_technical_task(task.model_dump())
-                    task_id = proposed_tickets.add_high_level_task(task.model_dump())
-                    task.id = task_id
-
-                    # Add to tasks list
-                    tasks.append(task)
-
-                    # Log the task generation
-                    logger.info(f"Successfully completed generation of {task_title}")
-                    self.execution_log.log_llm_interaction(
-                        f"Technical Task Generation - {task.title}",
-                        prompt,
-                        response,
-                        {"technical_task": task.model_dump()}
-                    )
-
+                    
+                    return task
+                    
                 except Exception as e:
-                    logger.error(f"Failed to process technical task {task_dict.get('title')}: {str(e)}")
+                    logger.error(f"Failed to process technical task {task_title}: {str(e)}")
                     logger.exception("Full traceback:")
-                    continue
-
-            logger.info(f"Completed technical task generation. Generated {len(tasks)} tasks")
-            return tasks
-
-        except Exception as e:
-            logger.error(f"Failed to generate technical tasks: {str(e)}")
-            logger.exception("Full traceback:")
-            return []
+                    raise
+        
+        # Create tasks for all technical tasks
+        enrichment_tasks = []
+        for idx, task_dict in enumerate(parsed_tasks, 1):
+            enrichment_tasks.append(enrich_task(task_dict, idx))
+        
+        # Run all tasks and gather results
+        results = await asyncio.gather(*enrichment_tasks, return_exceptions=True)
+        
+        # Filter out exceptions and return successfully enriched tasks
+        enriched_tasks = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Task enrichment failed: {str(result)}")
+            else:
+                enriched_tasks.append(result)
+        
+        return enriched_tasks
 
     async def _generate_research_summary(self, task_context: Dict[str, Any]) -> ResearchSummary:
         """Generate research summary for a technical task"""
-        logger.debug(f"Generating research summary for task: {task_context.get('title')}")
+        try:
+            logger.debug(f"Generating research summary for task: {task_context.get('title')}")
 
-        if not settings.ENABLE_RESEARCH_TASKS:
-            logger.debug("Research tasks disabled, skipping LLM call")
-            research_data = ResearchSummaryParser.parse("")
-            return ResearchSummary(**research_data)
+            if not settings.ENABLE_RESEARCH_TASKS:
+                logger.debug("Research tasks disabled, skipping LLM call")
+                return ResearchSummary(
+                    pain_points="",
+                    success_metrics="",
+                    similar_implementations="",
+                    modern_approaches=""
+                )
 
-        prompt = TechnicalTaskPromptBuilder.build_technical_task_research_prompt(task_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
-        logger.debug("Parsing research summary response")
-        research_data = ResearchSummaryParser.parse(response)
-        return ResearchSummary(**research_data)
+            prompt = TechnicalTaskPromptBuilder.build_technical_task_research_prompt(task_context)
+            response = await self.llm.generate_content(prompt)
+            logger.debug("Parsing research summary response")
+            raw_data = JSONSanitizer.safe_parse_with_fallback(response)
+            
+            if not raw_data:
+                return ResearchSummary(
+                    pain_points="",
+                    success_metrics="",
+                    similar_implementations="",
+                    modern_approaches=""
+                )
+            
+            return ResearchSummary(**raw_data)
+        except Exception as e:
+            logger.error(f"Failed to generate research summary: {str(e)}")
+            logger.exception("Full traceback:")
+            return ResearchSummary(
+                pain_points="",
+                success_metrics="",
+                similar_implementations="",
+                modern_approaches=""
+            )
 
     async def _generate_code_examples(self, task_context: Dict[str, Any]) -> List[CodeBlock]:
         """Generate code examples for a technical task"""
