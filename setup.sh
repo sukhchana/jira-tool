@@ -64,6 +64,28 @@ if [ -d "$PARENT_JIRA_TOOL" ]; then
         echo "Copied assets directory from parent."
     fi
     
+    # Check for and copy helm directory
+    if [ -d "$PARENT_JIRA_TOOL/helm" ]; then
+        echo "Found helm directory in parent jira_tool. Copying..."
+        mkdir -p ./helm
+        cp -R "$PARENT_JIRA_TOOL/helm/"* ./helm/
+        echo "Copied helm directory from parent."
+    fi
+    
+    # Check for and copy Dockerfile
+    if [ -f "$PARENT_JIRA_TOOL/Dockerfile" ]; then
+        echo "Found Dockerfile in parent jira_tool. Copying..."
+        cp "$PARENT_JIRA_TOOL/Dockerfile" ./Dockerfile
+        echo "Copied Dockerfile from parent."
+    fi
+    
+    # Check for and copy pipeline.yaml
+    if [ -f "$PARENT_JIRA_TOOL/pipeline.yaml" ]; then
+        echo "Found pipeline.yaml in parent jira_tool. Copying..."
+        cp "$PARENT_JIRA_TOOL/pipeline.yaml" ./pipeline.yaml
+        echo "Copied pipeline.yaml from parent."
+    fi
+    
     # Check for and copy specific files from llm directory
     if [ -d "$PARENT_JIRA_TOOL/llm" ]; then
         echo "Found llm directory in parent jira_tool."
