@@ -5,6 +5,11 @@ from typing import Dict, Any, List
 import yaml
 from loguru import logger
 
+from models.code_example import CodeExample
+from models.implementation_approach import ImplementationApproach
+from models.research_summary import ResearchSummary
+from models.test_plan import TestPlan
+
 
 class ProposedTicketsService:
     """Service for tracking proposed JIRA tickets in YAML format"""
@@ -60,7 +65,31 @@ class ProposedTicketsService:
             "business_value": task.get("business_value"),
             "implementation_notes": task.get("implementation_notes"),
             "parent_id": self.epic_key,
-            "implementation_details": task.get("implementation_details", {})
+            "implementation_details": task.get("implementation_details", {}),
+            "code_blocks": [
+                {
+                    "language": block.get("language", "text"),
+                    "description": block.get("description", ""),
+                    "code": block.get("code", ""),
+                    "test_cases": [
+                        {
+                            "description": test_case.get("description", ""),
+                            "code": test_case.get("code", "")
+                        }
+                        for test_case in block.get("test_cases", [])
+                    ]
+                }
+                for block in task.get("code_blocks", [])
+            ],
+            "research_summary": {
+                "pain_points": task.get("research_summary", {}).get("pain_points", ""),
+                "success_metrics": task.get("research_summary", {}).get("success_metrics", ""),
+                "similar_implementations": task.get("research_summary", {}).get("similar_implementations", ""),
+                "modern_approaches": task.get("research_summary", {}).get("modern_approaches", ""),
+                "performance_considerations": task.get("research_summary", {}).get("performance_considerations", ""),
+                "security_implications": task.get("research_summary", {}).get("security_implications", ""),
+                "maintenance_aspects": task.get("research_summary", {}).get("maintenance_aspects", "")
+            } if task.get("research_summary") else None
         }
 
         # Add user story specific fields
@@ -74,7 +103,10 @@ class ProposedTicketsService:
                     {
                         "id": self._generate_id("SCENARIO"),
                         "name": scenario.get("name", ""),
-                        "steps": scenario.get("steps", [])
+                        "steps": scenario.get("steps", []),
+                        "expected_result": scenario.get("expected_result", ""),
+                        "preconditions": scenario.get("preconditions", []),
+                        "postconditions": scenario.get("postconditions", [])
                     }
                     for scenario in task.get("scenarios", [])
                 ]
@@ -113,7 +145,38 @@ class ProposedTicketsService:
                 "required_skills": subtask["required_skills"],
                 "dependencies": subtask["dependencies"],
                 "suggested_assignee": subtask["suggested_assignee"],
-                "implementation_details": subtask.get("implementation_details", {})
+                "implementation_details": subtask.get("implementation_details", {}),
+                "code_blocks": [
+                    {
+                        "language": block.get("language", "text"),
+                        "description": block.get("description", ""),
+                        "code": block.get("code", ""),
+                        "test_cases": [
+                            {
+                                "description": test_case.get("description", ""),
+                                "code": test_case.get("code", "")
+                            }
+                            for test_case in block.get("test_cases", [])
+                        ]
+                    }
+                    for block in subtask.get("code_blocks", [])
+                ],
+                "test_plan": {
+                    "unit_tests": subtask.get("test_plan", {}).get("unit_tests", []),
+                    "integration_tests": subtask.get("test_plan", {}).get("integration_tests", []),
+                    "edge_cases": subtask.get("test_plan", {}).get("edge_cases", []),
+                    "performance_tests": subtask.get("test_plan", {}).get("performance_tests", []),
+                    "test_data_requirements": subtask.get("test_plan", {}).get("test_data_requirements", [])
+                } if subtask.get("test_plan") else None,
+                "research_summary": {
+                    "pain_points": subtask.get("research_summary", {}).get("pain_points", ""),
+                    "success_metrics": subtask.get("research_summary", {}).get("success_metrics", ""),
+                    "similar_implementations": subtask.get("research_summary", {}).get("similar_implementations", ""),
+                    "modern_approaches": subtask.get("research_summary", {}).get("modern_approaches", ""),
+                    "performance_considerations": subtask.get("research_summary", {}).get("performance_considerations", ""),
+                    "security_implications": subtask.get("research_summary", {}).get("security_implications", ""),
+                    "maintenance_aspects": subtask.get("research_summary", {}).get("maintenance_aspects", "")
+                } if subtask.get("research_summary") else None
             })
 
         return subtask_ids

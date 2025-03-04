@@ -1,0 +1,215 @@
+[
+  {
+    "id": "USER-STORY-1",
+    "title": "User Story - Configure Ping Federate for OIDC and AD Integration",
+    "type": "User Story",
+    "description": {
+      "role": "Active Directory Administrator",
+      "goal": "Configure Ping Federate to connect to Active Directory and map AD attributes to OIDC claims.",
+      "benefit": "Allows the application to retrieve user information from Active Directory via Ping Federate using OIDC, simplifying user management and authentication.",
+      "formatted": "As an Active Directory Administrator, I want to configure Ping Federate to connect to Active Directory and map AD attributes to OIDC claims, so that the application can retrieve user information from Active Directory via Ping Federate using OIDC."
+    },
+    "technical_domain": "Active Directory Integration",
+    "complexity": "High",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Ping Federate Administration",
+      "Active Directory Administration",
+      "OIDC Configuration"
+    ],
+    "suggested_assignee": "Active Directory Administrator",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Research tasks disabled",
+      "success_metrics": "Research tasks disabled",
+      "similar_implementations": "Research tasks disabled",
+      "modern_approaches": "Research tasks disabled"
+    },
+    "code_blocks": [
+      {
+        "language": "xml",
+        "description": "Example PingFederate Data Store Configuration (LDAP)",
+        "code": "<!-- Example Data Store Configuration in PingFederate -->\n<ds:DataStore id=\"AD_DataStore\" xmlns:ds=\"urn:sourceid.org:saml2:adapter:conf\">\n    <ds:Name>Active Directory</ds:Name>\n    <ds:Description>Connection to the Enterprise Active Directory</ds:Description>\n    <ds:Type>LDAP</ds:Type>\n    <ds:Configuration>\n        <ds:Parameter name=\"ldapUrl\">ldap://ad.example.com:389</ds:Parameter>\n        <ds:Parameter name=\"useSSL\">false</ds:Parameter>\n        <ds:Parameter name=\"bindDN\">CN=PingFederate,OU=ServiceAccounts,DC=example,DC=com</ds:Parameter>\n        <ds:Parameter name=\"bindPassword\">Password123!</ds:Parameter>\n        <ds:Parameter name=\"baseDN\">DC=example,DC=com</ds:Parameter>\n        <ds:Parameter name=\"userSearchFilter\">(&(objectClass=user)(sAMAccountName={username}))</ds:Parameter>\n        <ds:Parameter name=\"groupSearchFilter\">(member={dn})</ds:Parameter>\n        <ds:Parameter name=\"userNameAttribute\">sAMAccountName</ds:Parameter>\n        <ds:Parameter name=\"memberAttribute\">memberOf</ds:Parameter>\n        <ds:Parameter name=\"connectionTimeout\">5000</ds:Parameter>\n        <ds:Parameter name=\"readTimeout\">5000</ds:Parameter>\n    </ds:Configuration>\n</ds:DataStore>"
+      },
+      {
+        "language": "xml",
+        "description": "Example OIDC Policy Configuration in PingFederate (Attribute Mapping)",
+        "code": "<!-- Example OIDC Policy Configuration in PingFederate -->\n<policy:OidcPolicy id=\"OIDC_Policy\" xmlns:policy=\"urn:sourceid.org:saml2:adapter:conf\">\n    <policy:Name>OIDC Policy for AD Attributes</policy:Name>\n    <policy:Description>Maps AD attributes to OIDC claims.</policy:Description>\n    <policy:AttributeContract>\n        <policy:Attribute name=\"sub\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"objectGUID\"/>\n        <policy:Attribute name=\"email\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"mail\"/>\n        <policy:Attribute name=\"name\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"displayName\"/>\n        <policy:Attribute name=\"given_name\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"givenName\"/>\n        <policy:Attribute name=\"family_name\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"sn\"/>\n        <policy:Attribute name=\"groups\" source=\"data-store\" data-store-id=\"AD_DataStore\" attribute-name=\"memberOf\"/>\n    </policy:AttributeContract>\n    <policy:ClaimMappings>\n        <policy:ClaimMapping claim-name=\"sub\" attribute-name=\"sub\"/>\n        <policy:ClaimMapping claim-name=\"email\" attribute-name=\"email\"/>\n        <policy:ClaimMapping claim-name=\"name\" attribute-name=\"name\"/>\n        <policy:ClaimMapping claim-name=\"given_name\" attribute-name=\"given_name\"/>\n        <policy:ClaimMapping claim-name=\"family_name\" attribute-name=\"family_name\"/>\n        <policy:ClaimMapping claim-name=\"groups\" attribute-name=\"groups\"/>\n    </policy:ClaimMappings>\n</policy:OidcPolicy>"
+      },
+      {
+        "language": "java",
+        "description": "Example Java code to handle LDAP connection errors (simulated)",
+        "code": "import java.util.Hashtable;\nimport javax.naming.Context;\nimport javax.naming.NamingException;\nimport javax.naming.ldap.InitialLdapContext;\nimport javax.naming.ldap.LdapContext;\n\npublic class LDAPConnection {\n\n    public static LdapContext connect(String ldapUrl, String bindDN, String bindPassword) {\n        Hashtable<String, String> env = new Hashtable<>();\n        env.put(Context.INITIAL_CONTEXT_FACTORY, \"com.sun.jndi.ldap.LdapCtxFactory\");\n        env.put(Context.PROVIDER_URL, ldapUrl);\n        env.put(Context.SECURITY_AUTHENTICATION, \"simple\");\n        env.put(Context.SECURITY_PRINCIPAL, bindDN);\n        env.put(Context.SECURITY_CREDENTIALS, bindPassword);\n\n        LdapContext ctx = null;\n        try {\n            ctx = new InitialLdapContext(env, null);\n            System.out.println(\"LDAP Connection Successful!\");\n        } catch (NamingException e) {\n            System.err.println(\"LDAP Connection Failed: \" + e.getMessage());\n            // Handle specific exceptions (e.g., invalid credentials, server unavailable)\n            if (e.getMessage().contains(\"Invalid credentials\")) {\n                System.err.println(\"Error: Invalid LDAP credentials provided.\");\n            } else if (e.getMessage().contains(\"Connection refused\")) {\n                System.err.println(\"Error: LDAP server connection refused.  Verify the server is running and accessible.\");\n            } else {\n                System.err.println(\"Error: An unexpected LDAP error occurred.\");\n            }\n            // Log the exception for further investigation\n            e.printStackTrace();\n            // Consider throwing a custom exception to propagate the error\n            // throw new LDAPConnectionException(\"Failed to connect to LDAP\", e);\n        } finally {\n            // Consider adding resource cleanup here if needed\n        }\n        return ctx;\n    }\n\n    public static void main(String[] args) {\n        // Example usage (replace with your actual values)\n        String ldapUrl = \"ldap://ad.example.com:389\";\n        String bindDN = \"CN=PingFederate,OU=ServiceAccounts,DC=example,DC=com\";\n        String bindPassword = \"Password123!\";\n\n        LdapContext context = connect(ldapUrl, bindDN, bindPassword);\n        if (context != null) {\n            try {\n                context.close();\n                System.out.println(\"LDAP Connection Closed.\");\n            } catch (NamingException e) {\n                System.err.println(\"Error closing LDAP context: \" + e.getMessage());\n            }\n        }\n    }\n}"
+      }
+    ],
+    "scenarios": []
+  },
+  {
+    "id": "USER-STORY-2",
+    "title": "User Story - Implement OAuth 2.0 Client Credentials Grant for Machine-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application (Machine)",
+      "goal": "Authenticate with the application using the OAuth 2.0 Client Credentials grant.",
+      "benefit": "Allows the application to securely access resources without human intervention.",
+      "formatted": "As an Application (Machine), I want to authenticate with the application using the OAuth 2.0 Client Credentials grant, so that I can securely access resources without human intervention."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OAuth 2.0",
+      "Authlib/requests-oauthlib"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Research tasks disabled",
+      "success_metrics": "Research tasks disabled",
+      "similar_implementations": "Research tasks disabled",
+      "modern_approaches": "Research tasks disabled"
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates requesting an access token using the Client Credentials Grant with Authlib.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\n\n# Load client credentials from environment variables (best practice for security)\nCLIENT_ID = os.environ.get('CLIENT_ID')\nCLIENT_SECRET = os.environ.get('CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('TOKEN_ENDPOINT')  # e.g., 'https://your-auth-server/oauth2/token'\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT]):\n    raise ValueError(\"Missing required environment variables: CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT\")\n\n# Create an OAuth2Session client\nclient = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n\n# Request an access token\ntry:\n    token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n    print(\"Access Token:\", token['access_token'])\nexcept Exception as e:\n    print(f\"Error fetching token: {e}\")\n    # Handle the error appropriately, e.g., log it, retry, or alert an administrator\n    exit(1)"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates using the access token to access a protected resource and handling potential errors.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\nimport requests\n\nCLIENT_ID = os.environ.get('CLIENT_ID')\nCLIENT_SECRET = os.environ.get('CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('TOKEN_ENDPOINT')\nRESOURCE_ENDPOINT = os.environ.get('RESOURCE_ENDPOINT')  # e.g., 'https://your-api/protected-resource'\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, RESOURCE_ENDPOINT]):\n    raise ValueError(\"Missing required environment variables: CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT, RESOURCE_ENDPOINT\")\n\nclient = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n\ntry:\n    token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n\n    # Access the protected resource using the access token\n    response = client.get(RESOURCE_ENDPOINT)\n\n    if response.status_code == 200:\n        print(\"Successfully accessed protected resource:\", response.json())\n    elif response.status_code == 401:\n        print(\"Unauthorized: Invalid access token.\")\n        # Handle invalid token, e.g., refresh token (if supported), or request a new one.\n    elif response.status_code == 403:\n        print(\"Forbidden: Insufficient permissions.\")\n        # Handle insufficient permissions.\n    else:\n        print(f\"Error accessing resource: {response.status_code} - {response.text}\")\n        # Handle other errors.\n\nexcept Exception as e:\n    print(f\"Error: {e}\")\n    # Handle exceptions during token retrieval or resource access.\n    exit(1)"
+      },
+      {
+        "language": "python",
+        "description": "Illustrates a basic token validation example (resource server side).  This is a simplified example; in a real-world scenario, you'd likely use a JWT library to verify the token's signature and claims against your authorization server's public key or JWKS endpoint.",
+        "code": "import requests\nimport os\n\n# This is a simplified example.  In a real-world scenario, you'd validate the JWT signature and claims.\n# This example assumes the authorization server provides an introspection endpoint.\n\nINTROSPECTION_ENDPOINT = os.environ.get('INTROSPECTION_ENDPOINT') # e.g., 'https://your-auth-server/oauth2/introspect'\nCLIENT_ID = os.environ.get('RESOURCE_SERVER_CLIENT_ID') # Client ID of the resource server at the auth server\nCLIENT_SECRET = os.environ.get('RESOURCE_SERVER_CLIENT_SECRET') # Client Secret of the resource server at the auth server\n\nif not all([INTROSPECTION_ENDPOINT, CLIENT_ID, CLIENT_SECRET]):\n    raise ValueError(\"Missing required environment variables: INTROSPECTION_ENDPOINT, CLIENT_ID, CLIENT_SECRET\")\n\ndef validate_token(token):\n    try:\n        response = requests.post(\n            INTROSPECTION_ENDPOINT,\n            auth=(CLIENT_ID, CLIENT_SECRET),\n            data={'token': token}\n        )\n        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\n        token_info = response.json()\n\n        if token_info.get('active', False):\n            # Token is valid\n            return True, token_info\n        else:\n            # Token is invalid\n            return False, None\n\n    except requests.exceptions.RequestException as e:\n        print(f\"Error during token introspection: {e}\")\n        return False, None\n\n# Example usage:\naccess_token = \"your_access_token_here\" # Replace with the actual token from the client\nis_valid, token_data = validate_token(access_token)\n\nif is_valid:\n    print(\"Token is valid.\")\n    print(\"Token data:\", token_data)\nelse:\n    print(\"Token is invalid.\")"
+      }
+    ],
+    "scenarios": []
+  },
+  {
+    "id": "USER-STORY-3",
+    "title": "User Story - Implement OIDC Authorization Code Grant for Human-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application User (Human)",
+      "goal": "Authenticate with the application using the OIDC Authorization Code grant.",
+      "benefit": "Allows users to securely log in to the application using their existing Active Directory credentials.",
+      "formatted": "As an Application User (Human), I want to authenticate with the application using the OIDC Authorization Code grant, so that I can securely log in to the application using my existing Active Directory credentials."
+    },
+    "technical_domain": "OpenID Connect (OIDC) Integration",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OIDC",
+      "Flask/Django",
+      "Authlib/requests-oauthlib"
+    ],
+    "suggested_assignee": "Full Stack Developer",
+    "dependencies": [
+      "User Story - Configure Ping Federate for OIDC and AD Integration"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Research tasks disabled",
+      "success_metrics": "Research tasks disabled",
+      "similar_implementations": "Research tasks disabled",
+      "modern_approaches": "Research tasks disabled"
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Flask application demonstrating the OIDC Authorization Code Grant flow using Authlib.  This shows the core authentication process, including redirecting to the authorization server, handling the callback, and validating the ID token.",
+        "code": "from flask import Flask, redirect, session, url_for, render_template\nfrom authlib.integrations.flask_client import OAuth\nimport os\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# OIDC Configuration (replace with your actual values)\nOIDC_CLIENT_ID = 'your_client_id'\nOIDC_CLIENT_SECRET = 'your_client_secret'\nOIDC_ISSUER = 'your_oidc_issuer'\nOIDC_AUTHORIZE_URL = f'{OIDC_ISSUER}/as/authorization.oauth2'\nOIDC_TOKEN_URL = f'{OIDC_ISSUER}/as/token.oauth2'\nOIDC_USERINFO_ENDPOINT = f'{OIDC_ISSUER}/idp/userinfo.openid'\n\noauth = OAuth(app)\noauth.register(\n    name='oidc',\n    client_id=OIDC_CLIENT_ID,\n    client_secret=OIDC_CLIENT_SECRET,\n    server_metadata_url=f'{OIDC_ISSUER}/.well-known/openid-configuration',\n    authorize_url=OIDC_AUTHORIZE_URL,\n    token_endpoint=OIDC_TOKEN_URL,\n    userinfo_endpoint=OIDC_USERINFO_ENDPOINT,\n    client_kwargs={'scope': 'openid profile email'}\n)\n\n@app.route('/')\ndef index():\n    user = session.get('user')\n    return render_template('index.html', user=user)\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('authorize', _external=True)\n    return oauth.oidc.authorize_redirect(redirect_uri)\n\n@app.route('/authorize')\ndef authorize():\n    try:\n        token = oauth.oidc.authorize_access_token()\n        userinfo = token.get('userinfo')\n        session['user'] = userinfo\n        return redirect('/')\n    except Exception as e:\n        return f'Authentication failed: {e}', 400\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    return redirect('/')\n\nif __name__ == '__main__':\n    app.run(debug=True, host='0.0.0.0', port=5000)"
+      },
+      {
+        "language": "python",
+        "description": "Error handling and edge cases. This example shows how to handle potential errors during token validation and network issues during the OIDC flow.",
+        "code": "from flask import Flask, redirect, session, url_for, render_template, request\nfrom authlib.integrations.flask_client import OAuth\nimport os\nimport logging\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n# OIDC Configuration (replace with your actual values)\nOIDC_CLIENT_ID = 'your_client_id'\nOIDC_CLIENT_SECRET = 'your_client_secret'\nOIDC_ISSUER = 'your_oidc_issuer'\nOIDC_AUTHORIZE_URL = f'{OIDC_ISSUER}/as/authorization.oauth2'\nOIDC_TOKEN_URL = f'{OIDC_ISSUER}/as/token.oauth2'\nOIDC_USERINFO_ENDPOINT = f'{OIDC_ISSUER}/idp/userinfo.openid'\n\noauth = OAuth(app)\noauth.register(\n    name='oidc',\n    client_id=OIDC_CLIENT_ID,\n    client_secret=OIDC_CLIENT_SECRET,\n    server_metadata_url=f'{OIDC_ISSUER}/.well-known/openid-configuration',\n    authorize_url=OIDC_AUTHORIZE_URL,\n    token_endpoint=OIDC_TOKEN_URL,\n    userinfo_endpoint=OIDC_USERINFO_ENDPOINT,\n    client_kwargs={'scope': 'openid profile email'}\n)\n\n@app.route('/')\ndef index():\n    user = session.get('user')\n    return render_template('index.html', user=user)\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('authorize', _external=True)\n    return oauth.oidc.authorize_redirect(redirect_uri)\n\n@app.route('/authorize')\ndef authorize():\n    try:\n        token = oauth.oidc.authorize_access_token(request)\n        if not token:\n            logger.error('Failed to retrieve access token.')\n            return 'Authentication failed: Could not retrieve access token.', 400\n\n        userinfo = token.get('userinfo')\n        if not userinfo:\n            logger.warning('Userinfo not found in token response.')\n            # Handle the case where userinfo is not available.  Consider using the access token to call the userinfo endpoint directly.\n            return 'Authentication successful, but user information is unavailable.', 200\n\n        session['user'] = userinfo\n        return redirect('/')\n\n    except Exception as e:\n        logger.exception('Authentication failed.')\n        return f'Authentication failed: {e}', 400\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    return redirect('/')\n\nif __name__ == '__main__':\n    app.run(debug=True, host='0.0.0.0', port=5000)"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates secure session management using Flask's session capabilities.  It highlights setting the `SESSION_COOKIE_SECURE` flag for HTTPS and using `SESSION_COOKIE_HTTPONLY` to prevent client-side script access to the session cookie.",
+        "code": "from flask import Flask, redirect, session, url_for, render_template\nfrom authlib.integrations.flask_client import OAuth\nimport os\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Secure Session Configuration\napp.config['SESSION_COOKIE_SECURE'] = True  # Only send cookies over HTTPS\napp.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JavaScript access\napp.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protect against CSRF\n\n# OIDC Configuration (replace with your actual values)\nOIDC_CLIENT_ID = 'your_client_id'\nOIDC_CLIENT_SECRET = 'your_client_secret'\nOIDC_ISSUER = 'your_oidc_issuer'\nOIDC_AUTHORIZE_URL = f'{OIDC_ISSUER}/as/authorization.oauth2'\nOIDC_TOKEN_URL = f'{OIDC_ISSUER}/as/token.oauth2'\nOIDC_USERINFO_ENDPOINT = f'{OIDC_ISSUER}/idp/userinfo.openid'\n\noauth = OAuth(app)\noauth.register(\n    name='oidc',\n    client_id=OIDC_CLIENT_ID,\n    client_secret=OIDC_CLIENT_SECRET,\n    server_metadata_url=f'{OIDC_ISSUER}/.well-known/openid-configuration',\n    authorize_url=OIDC_AUTHORIZE_URL,\n    token_endpoint=OIDC_TOKEN_URL,\n    userinfo_endpoint=OIDC_USERINFO_ENDPOINT,\n    client_kwargs={'scope': 'openid profile email'}\n)\n\n@app.route('/')\ndef index():\n    user = session.get('user')\n    return render_template('index.html', user=user)\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('authorize', _external=True)\n    return oauth.oidc.authorize_redirect(redirect_uri)\n\n@app.route('/authorize')\ndef authorize():\n    try:\n        token = oauth.oidc.authorize_access_token()\n        userinfo = token.get('userinfo')\n        session['user'] = userinfo\n        return redirect('/')\n    except Exception as e:\n        return f'Authentication failed: {e}', 400\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    return redirect('/')\n\nif __name__ == '__main__':\n    app.run(debug=True, host='0.0.0.0', port=5000)"
+      }
+    ],
+    "scenarios": []
+  },
+  {
+    "id": "USER-STORY-4",
+    "title": "User Story - Retrieve User Profile Information from OIDC Claims",
+    "type": "User Story",
+    "description": {
+      "role": "Application",
+      "goal": "Retrieve user profile information from the OIDC claims after successful authentication.",
+      "benefit": "Allows the application to personalize the user experience and access necessary user data.",
+      "formatted": "As an Application, I want to retrieve user profile information from the OIDC claims after successful authentication, so that I can personalize the user experience and access necessary user data."
+    },
+    "technical_domain": "OpenID Connect (OIDC) Integration",
+    "complexity": "Low",
+    "business_value": "Medium",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OIDC",
+      "Flask/Django"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [
+      "User Story - Implement OIDC Authorization Code Grant for Human-to-Machine Authentication"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Research tasks disabled",
+      "success_metrics": "Research tasks disabled",
+      "similar_implementations": "Research tasks disabled",
+      "modern_approaches": "Research tasks disabled"
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates parsing the ID token and extracting user information using the `python-jose` library.  It also shows basic claim mapping.",
+        "code": "import jwt\nimport json\n\n# Mock ID Token (replace with actual token from OIDC provider)\nid_token = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZW1haWwiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsImdpdmVuX25hbWUiOiJKb2huIiwicGljdHVyZSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYXZhdGFyLmpwZyJ9.secret\"\n\n# Replace with your OIDC provider's public key or JWKS URI for verification in a real application\n# For demonstration purposes, we skip verification here.  NEVER do this in production.\n\ndef decode_and_extract_claims(token):\n    try:\n        # In a real application, you would verify the token signature using the OIDC provider's public key or JWKS URI.\n        # This example skips verification for simplicity, which is NOT secure.\n        payload = jwt.decode(token, key='secret', algorithms=['HS256'], options={'verify_signature': False})\n\n        # Map OIDC claims to application user properties\n        user_info = {\n            \"user_id\": payload.get(\"sub\"),\n            \"email\": payload.get(\"email\"),\n            \"display_name\": payload.get(\"name\"),\n            \"given_name\": payload.get(\"given_name\"),\n            \"picture\": payload.get(\"picture\")\n        }\n\n        return user_info\n    except jwt.exceptions.InvalidTokenError as e:\n        print(f\"Error decoding token: {e}\")\n        return None\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        return None\n\n\nuser_profile = decode_and_extract_claims(id_token)\n\nif user_profile:\n    print(json.dumps(user_profile, indent=4))\nelse:\n    print(\"Failed to retrieve user profile.\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates integration with a Flask application and handling missing claims.  Includes a basic route to display user profile information.",
+        "code": "from flask import Flask, request, jsonify\nimport jwt\n\napp = Flask(__name__)\n\n# Mock ID Token (replace with actual token from OIDC provider)\nid_token = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZW1haWwiOiJqb2huLmRvZUBleGFtcGxlLmNvbSIsImdpdmVuX25hbWUiOiJKb2huIiwicGljdHVyZSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYXZhdGFyLmpwZyJ9.secret\"\n\n# Replace with your OIDC provider's public key or JWKS URI for verification in a real application\n# For demonstration purposes, we skip verification here.  NEVER do this in production.\n\ndef get_user_profile(token):\n    try:\n        # In a real application, you would verify the token signature using the OIDC provider's public key or JWKS URI.\n        # This example skips verification for simplicity, which is NOT secure.\n        payload = jwt.decode(token, key='secret', algorithms=['HS256'], options={'verify_signature': False})\n\n        user_id = payload.get(\"sub\")\n        email = payload.get(\"email\")\n        display_name = payload.get(\"name\")\n\n        if not user_id or not email:\n            raise ValueError(\"Required claims (sub, email) are missing.\")\n\n        user_info = {\n            \"user_id\": user_id,\n            \"email\": email,\n            \"display_name\": display_name if display_name else \"Unknown User\", # Handle missing display_name\n        }\n\n        return user_info\n    except jwt.exceptions.InvalidTokenError:\n        return {\"error\": \"Invalid token\"}, 401\n    except ValueError as e:\n        return {\"error\": str(e)}, 400\n    except Exception as e:\n        return {\"error\": f\"Unexpected error: {e}\"}, 500\n\n\n@app.route('/profile')\ndef user_profile_route():\n    # In a real application, you would get the token from the Authorization header.\n    # For this example, we're using a hardcoded token.\n    user_profile = get_user_profile(id_token)\n    if isinstance(user_profile, tuple): # Check if it's an error response\n        return jsonify(user_profile[0]), user_profile[1]\n    return jsonify(user_profile)\n\nif __name__ == '__main__':\n    app.run(debug=True)"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates more robust error handling, including data validation and sanitization (basic example).",
+        "code": "import jwt\nimport html\n\n# Mock ID Token (replace with actual token from OIDC provider)\nid_token = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IjxhIGhyZWY9XCJqYXZhc2NyaXB0OmFsZXJ0KFwiWFNTIVwiKVwiPkpvaG4gRG9lPC9hPiIsImVtYWlsIjoiam9obi5kb2VAYXQgdGhlcmF0IGV4YW1wbGUgZG90IGNvbSIsImdpdmVuX25hbWUiOiJKb2huIiwicGljdHVyZSI6Imh0dHBzOi8vZXhhbXBsZS5jb20vYXZhdGFyLmpwZyJ9.secret\"\n\n# Replace with your OIDC provider's public key or JWKS URI for verification in a real application\n# For demonstration purposes, we skip verification here.  NEVER do this in production.\n\ndef extract_and_validate_claims(token):\n    try:\n        # In a real application, you would verify the token signature using the OIDC provider's public key or JWKS URI.\n        # This example skips verification for simplicity, which is NOT secure.\n        payload = jwt.decode(token, key='secret', algorithms=['HS256'], options={'verify_signature': False})\n\n        user_id = payload.get(\"sub\")\n        email = payload.get(\"email\")\n        display_name = payload.get(\"name\")\n\n        if not user_id:\n            raise ValueError(\"Missing required claim: sub (user ID)\")\n        if not email:\n            raise ValueError(\"Missing required claim: email\")\n\n        # Basic data validation and sanitization\n        if not isinstance(user_id, str) or len(user_id) > 255:\n            raise ValueError(\"Invalid user ID format.\")\n        if '@' not in email or len(email) > 255:\n            raise ValueError(\"Invalid email format.\")\n\n        # Sanitize display name to prevent XSS (very basic example, use a more robust library in production)\n        sanitized_display_name = html.escape(display_name) if display_name else \"Unknown User\"\n\n        user_info = {\n            \"user_id\": user_id,\n            \"email\": email,\n            \"display_name\": sanitized_display_name,\n        }\n\n        return user_info\n\n    except jwt.exceptions.InvalidTokenError as e:\n        print(f\"Error decoding token: {e}\")\n        return None\n    except ValueError as e:\n        print(f\"Validation error: {e}\")\n        return None\n    except Exception as e:\n        print(f\"Unexpected error: {e}\")\n        return None\n\n\nuser_profile = extract_and_validate_claims(id_token)\n\nif user_profile:\n    print(user_profile)\nelse:\n    print(\"Failed to retrieve and validate user profile.\")"
+      }
+    ],
+    "scenarios": []
+  }
+]

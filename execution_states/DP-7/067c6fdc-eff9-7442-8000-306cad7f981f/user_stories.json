@@ -1,0 +1,849 @@
+[
+  {
+    "id": "USER-STORY-1",
+    "title": "User Story - Implement OAuth 2.0 Client Credentials Grant for Machine-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application",
+      "goal": "Authenticate with Ping Federate to securely access protected resources without human intervention.",
+      "benefit": "Enables automated processes and system integrations to function securely.",
+      "formatted": "As an Application, I want to authenticate with Ping Federate using the Client Credentials grant type, so that I can securely access protected resources without human intervention."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OAuth 2.0",
+      "Ping Federate",
+      "Authlib"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Currently, machine-to-machine authentication likely relies on less secure methods like API keys embedded in code or configuration files, or potentially no authentication at all. This leads to several pain points:\n\n*   **Security Risks:** API keys are easily compromised if exposed, leading to unauthorized access and data breaches. Lack of authentication exposes resources to anyone.\n*   **Maintenance Overhead:** Managing and rotating API keys across multiple applications and environments is cumbersome and error-prone.\n*   **Lack of Auditing:** Difficult to track which application is accessing resources and when, hindering auditing and accountability.\n*   **Scalability Issues:** Managing API keys becomes increasingly complex as the number of applications and integrations grows.\n*   **Compliance Concerns:** Using insecure authentication methods can violate compliance regulations (e.g., GDPR, HIPAA).\n*   **Limited Access Control:** API keys often grant broad access, rather than fine-grained permissions based on the application's specific needs.\n*   **Token Management:** Without OAuth 2.0, there's no built-in mechanism for token expiration, revocation, or refresh, increasing the risk of long-lived compromised credentials.",
+      "success_metrics": "*   **Successful Token Acquisition Rate:** Percentage of authentication attempts that result in a valid access token from Ping Federate (target: >99.9%).\n*   **Token Validation Success Rate:** Percentage of access tokens successfully validated by the application before accessing protected resources (target: >99.9%).\n*   **Authentication Latency:** Time taken to acquire an access token from Ping Federate (target: < 500ms).\n*   **Security Vulnerability Scan Results:** Regular security scans (e.g., using static analysis tools) showing no vulnerabilities related to credential storage or token handling.\n*   **Credential Rotation Frequency:** Frequency at which client secrets are rotated (target: at least quarterly).\n*   **Error Rate:** Number of failed authentication attempts due to invalid credentials or network errors (target: < 0.1%).\n*   **Audit Log Completeness:** Percentage of authentication attempts (successful and failed) that are properly logged with relevant information.\n*   **Resource Access Control:** Verify that only authorized applications can access specific resources based on the token's scope or claims.",
+      "similar_implementations": "*   **Authlib Examples:** Authlib's documentation provides comprehensive examples of implementing OAuth 2.0 client credentials grant in Python. [Authlib Documentation](https://docs.authlib.org/en/latest/)\n*   **Ping Federate Documentation:** Ping Federate's documentation offers guidance on configuring the client credentials grant type and managing clients. [Ping Identity Documentation](https://www.pingidentity.com/en/resources/documentation.html)\n*   **OAuth 2.0 Frameworks:** Other Python OAuth 2.0 libraries like `requests-oauthlib` can also be used, but Authlib is generally preferred for its comprehensive features and security.\n*   **Cloud Provider IAM:** AWS IAM, Azure Active Directory, and Google Cloud IAM all offer similar machine-to-machine authentication mechanisms based on OAuth 2.0 or similar standards.\n*   **OpenID Connect Federation:** While this story focuses on Client Credentials, understanding OpenID Connect federation can provide broader context on identity management.\n*   **Example Code Repositories:** Search GitHub and other code repositories for examples of Python applications using Authlib and Ping Federate for client credentials grant.",
+      "modern_approaches": "*   **Secure Credential Storage:** Use a dedicated secrets management solution like HashiCorp Vault, AWS Secrets Manager, Azure Key Vault, or Google Cloud Secret Manager to store client ID and secret. Avoid storing credentials in code, configuration files, or environment variables directly.\n*   **Token Validation with JWT:** Implement robust token validation using JSON Web Tokens (JWT) and verify the token's signature, issuer, audience, and expiration time.\n*   **Mutual TLS (mTLS):** Consider using mTLS for enhanced security, where both the client and server authenticate each other using certificates.\n*   **Ephemeral Credentials:** Explore the use of short-lived credentials or dynamic client registration to minimize the risk of credential compromise.\n*   **Observability and Monitoring:** Implement comprehensive logging and monitoring to track authentication attempts, token usage, and potential security threats. Use tools like Prometheus, Grafana, or ELK stack.\n*   **Infrastructure as Code (IaC):** Use IaC tools like Terraform or Ansible to automate the deployment and configuration of Ping Federate clients and related infrastructure.\n*   **Containerization and Orchestration:** Deploy the application in containers (e.g., Docker) and orchestrate them using Kubernetes for scalability and resilience.\n*   **Zero Trust Architecture:** Adopt a zero-trust security model, where no user or application is trusted by default, and access is granted based on strict verification and authorization policies.\n*   **API Gateways:** Utilize API gateways to enforce authentication and authorization policies, rate limiting, and other security measures.\n*   **Regular Security Audits:** Conduct regular security audits and penetration testing to identify and address potential vulnerabilities.",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates requesting an access token from Ping Federate using the Client Credentials grant type with Authlib.",
+        "code": "from authlib.integrations.requests_client import OAuth2Session\nimport os\nimport logging\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n# Load client ID and secret from environment variables (secure storage)\nCLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\nTOKEN_ENDPOINT = os.environ.get('PING_FEDERATE_TOKEN_ENDPOINT') # e.g., 'https://your-ping-federate.com/as/token.oauth2'\n\nif not all([CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT]):\n    logger.error(\"Missing required environment variables (CLIENT_ID, CLIENT_SECRET, TOKEN_ENDPOINT)\")\n    exit(1)\n\n\ndef get_token():\n    try:\n        client = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n        token = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n        logger.info(\"Successfully retrieved access token.\")\n        return token\n    except Exception as e:\n        logger.error(f\"Failed to retrieve access token: {e}\")\n        return None\n\n\nif __name__ == '__main__':\n    token_data = get_token()\n    if token_data:\n        print(f\"Access Token: {token_data['access_token']}\")\n    else:\n        print(\"Failed to obtain access token.\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates using the access token to access a protected resource and handling potential errors.",
+        "code": "import requests\nimport os\nimport logging\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n# Load protected resource URL from environment variables\nPROTECTED_RESOURCE_URL = os.environ.get('PROTECTED_RESOURCE_URL') # e.g., 'https://your-api.com/protected'\n\nif not PROTECTED_RESOURCE_URL:\n    logger.error(\"Missing required environment variable (PROTECTED_RESOURCE_URL)\")\n    exit(1)\n\n\ndef access_protected_resource(access_token):\n    headers = {'Authorization': f'Bearer {access_token}'}\n    try:\n        response = requests.get(PROTECTED_RESOURCE_URL, headers=headers)\n        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)\n        logger.info(f\"Successfully accessed protected resource. Status code: {response.status_code}\")\n        return response.json()\n    except requests.exceptions.HTTPError as e:\n        logger.error(f\"HTTP error accessing protected resource: {e}\")\n        return None\n    except requests.exceptions.RequestException as e:\n        logger.error(f\"Error accessing protected resource: {e}\")\n        return None\n\n\nif __name__ == '__main__':\n    # Assuming you have a function get_token() from the previous example\n    from authlib.integrations.requests_client import OAuth2Session\n\n    CLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\n    CLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\n    TOKEN_ENDPOINT = os.environ.get('PING_FEDERATE_TOKEN_ENDPOINT')\n\n    client = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n    token_data = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n\n    if token_data:\n        resource_data = access_protected_resource(token_data['access_token'])\n        if resource_data:\n            print(f\"Protected Resource Data: {resource_data}\")\n        else:\n            print(\"Failed to access protected resource.\")\n    else:\n        print(\"Failed to obtain access token.\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates token validation using introspection endpoint (if available) and handling token expiration.",
+        "code": "import requests\nimport os\nimport logging\nimport time\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n# Load introspection endpoint URL from environment variables\nINTROSPECTION_ENDPOINT = os.environ.get('PING_FEDERATE_INTROSPECTION_ENDPOINT') # e.g., 'https://your-ping-federate.com/as/introspect.oauth2'\nCLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\nCLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\n\nif not INTROSPECTION_ENDPOINT:\n    logger.warning(\"Introspection endpoint not configured. Token validation will be skipped.\")\n\n\ndef validate_token(access_token):\n    if not INTROSPECTION_ENDPOINT:\n        logger.warning(\"Skipping token validation because introspection endpoint is not configured.\")\n        return True # Assume valid if no introspection endpoint\n\n    try:\n        data = {'token': access_token, 'client_id': CLIENT_ID, 'client_secret': CLIENT_SECRET}\n        response = requests.post(INTROSPECTION_ENDPOINT, data=data)\n        response.raise_for_status()\n        introspection_data = response.json()\n\n        if introspection_data.get('active', False):\n            logger.info(\"Token is valid.\")\n            return True\n        else:\n            logger.warning(\"Token is invalid or inactive.\")\n            return False\n\n    except requests.exceptions.RequestException as e:\n        logger.error(f\"Error during token introspection: {e}\")\n        return False\n\n\ndef is_token_expired(token_data):\n    if 'expires_at' in token_data:\n        return token_data['expires_at'] <= time.time()\n    else:\n        # If expires_at is not present, assume token is expired after a default time (e.g., 1 hour)\n        # This is a fallback and should be avoided if possible.\n        logger.warning(\"'expires_at' not found in token data. Assuming token expires after 1 hour.\")\n        return time.time() + 3600 <= time.time()\n\n\nif __name__ == '__main__':\n    # Assuming you have a function get_token() from the previous example\n    from authlib.integrations.requests_client import OAuth2Session\n    import os\n\n    CLIENT_ID = os.environ.get('PING_FEDERATE_CLIENT_ID')\n    CLIENT_SECRET = os.environ.get('PING_FEDERATE_CLIENT_SECRET')\n    TOKEN_ENDPOINT = os.environ.get('PING_FEDERATE_TOKEN_ENDPOINT')\n\n    client = OAuth2Session(CLIENT_ID, CLIENT_SECRET)\n    token_data = client.fetch_token(TOKEN_ENDPOINT, grant_type='client_credentials')\n\n    if token_data:\n        if is_token_expired(token_data):\n            print(\"Token is expired. Requesting a new token.\")\n            # In a real application, you would request a new token here\n        elif validate_token(token_data['access_token']):\n            print(\"Token is valid.\")\n        else:\n            print(\"Token is invalid.\")\n    else:\n        print(\"Failed to obtain access token.\")"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Client Credentials Grant Flow",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has a valid client ID and secret configured"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured to accept client credentials grant requests from the application"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token from Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a valid access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs a successful authentication attempt"
+          },
+          {
+            "keyword": "And",
+            "text": "the application can successfully access protected resources using the access token"
+          }
+        ]
+      },
+      {
+        "name": "Invalid Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has an invalid client ID configured"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token from Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an 'invalid_client' error from Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs a failed authentication attempt"
+          },
+          {
+            "keyword": "Given",
+            "text": "the application has an invalid client secret configured"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests an access token from Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives an 'invalid_client' error from Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs a failed authentication attempt"
+          }
+        ]
+      },
+      {
+        "name": "Token Validation Failure",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application receives a valid access token from Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to validate the access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token is expired"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application rejects the access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application requests a new access token"
+          },
+          {
+            "keyword": "Given",
+            "text": "the application receives a valid access token from Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "the application attempts to validate the access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the access token's signature is invalid"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application rejects the access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs a failed authentication attempt"
+          }
+        ]
+      },
+      {
+        "name": "Rate Limiting",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has a valid client ID and secret configured"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate has a rate limit configured for token requests"
+          },
+          {
+            "keyword": "When",
+            "text": "the application exceeds the rate limit for token requests"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application receives a 'too_many_requests' error from Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs a failed authentication attempt"
+          },
+          {
+            "keyword": "And",
+            "text": "the application implements a retry mechanism with exponential backoff"
+          }
+        ]
+      },
+      {
+        "name": "Secure Storage of Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application has a client ID and secret"
+          },
+          {
+            "keyword": "When",
+            "text": "the application stores the client ID and secret"
+          },
+          {
+            "keyword": "Then",
+            "text": "the client ID and secret are encrypted at rest"
+          },
+          {
+            "keyword": "And",
+            "text": "the client ID and secret are not stored in plain text in configuration files or code"
+          },
+          {
+            "keyword": "And",
+            "text": "access to the stored credentials is restricted to authorized personnel and processes"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-2",
+    "title": "User Story - Implement Authorization Code Grant Flow for Human-to-Machine Authentication",
+    "type": "User Story",
+    "description": {
+      "role": "Application User",
+      "goal": "Authenticate with Ping Federate to access the application using my Active Directory credentials.",
+      "benefit": "Provides a secure and familiar login experience using existing enterprise credentials.",
+      "formatted": "As an Application User, I want to authenticate with Ping Federate using the Authorization Code grant flow, so that I can access the application using my Active Directory credentials."
+    },
+    "technical_domain": "OAuth 2.0 Implementation",
+    "complexity": "High",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "OAuth 2.0",
+      "Ping Federate",
+      "Authlib",
+      "Frontend Development (e.g., React, Angular, Vue.js)"
+    ],
+    "suggested_assignee": "Full Stack Developer",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Current pain points addressed by this story include:\n\n*   **Security Risks with Legacy Authentication:** Reliance on older, less secure authentication methods (e.g., username/password directly handled by the application) exposes the application and user credentials to vulnerabilities like credential stuffing and phishing.\n*   **Poor User Experience:** Requiring users to create and manage separate application-specific credentials leads to password fatigue and a fragmented user experience.\n*   **Maintenance Overhead:** Managing user accounts and authentication logic within the application increases development and maintenance costs.\n*   **Lack of Centralized Authentication and Authorization:** Without a centralized identity provider, enforcing consistent security policies and auditing user access becomes difficult.\n*   **Compliance Issues:** Meeting regulatory requirements (e.g., GDPR, HIPAA) becomes more challenging without a robust and auditable authentication system.\n*   **Scalability Challenges:** Managing authentication for a growing user base can become a bottleneck without a scalable solution like Ping Federate.\n*   **Single Sign-On (SSO) Incompatibility:** Users may need to log in separately to each application, even within the same organization, leading to a disjointed experience.\n*   **Mobile App Incompatibility:** Legacy authentication methods are often not well-suited for mobile applications, leading to security and usability issues.",
+      "success_metrics": "Specific, measurable metrics to evaluate the success of this story:\n\n*   **Successful Authentication Rate:** Percentage of users who successfully authenticate with Ping Federate and access the application.\n*   **Authentication Time:** Time taken for a user to complete the authentication flow (from redirect to Ping Federate to accessing the application).\n*   **Token Refresh Rate:** Frequency of access token refresh requests, indicating the effectiveness of the refresh token mechanism.\n*   **Error Rate:** Number of authentication failures or errors encountered by users.\n*   **User Adoption Rate:** Percentage of users who switch from legacy authentication methods to Ping Federate authentication.\n*   **Security Audit Score:** Improvement in security audit scores related to authentication and authorization.\n*   **Support Ticket Volume:** Reduction in support tickets related to authentication issues.\n*   **Application Performance Impact:** Measure the impact of the authentication flow on application performance (e.g., page load times).\n*   **Session Duration:** Average session duration for users authenticated via Ping Federate.\n*   **Compliance Adherence:** Verification that the implementation meets relevant security and compliance standards (e.g., OAuth 2.0, OpenID Connect).",
+      "similar_implementations": "Examples of similar implementations, tools, or references that can guide this implementation:\n\n*   **Auth0:** A popular identity-as-a-service (IDaaS) platform that provides pre-built authentication and authorization flows, including the Authorization Code Grant.\n*   **Okta:** Another leading IDaaS provider with similar capabilities to Auth0.\n*   **Keycloak:** An open-source identity and access management solution that supports the Authorization Code Grant and other OAuth 2.0 flows.\n*   **Spring Security OAuth:** A Java framework for implementing OAuth 2.0 flows.\n*   **Microsoft Authentication Library (MSAL):** A library for authenticating users with Microsoft identity platform.\n*   **RFC 6749 (The OAuth 2.0 Authorization Framework):** The official specification for the OAuth 2.0 protocol.\n*   **OpenID Connect:** A layer on top of OAuth 2.0 that provides identity information.\n*   **Ping Identity Documentation:** Ping Federate's official documentation provides detailed information on configuring and using the Authorization Code Grant.\n*   **Authlib Examples:** Authlib's documentation and examples provide guidance on implementing OAuth 2.0 flows in Python.\n*   **NIST Special Publication 800-63:** Digital Identity Guidelines.",
+      "modern_approaches": "Current (2024-2025) best practices, patterns, and modern approaches relevant to this story:\n\n*   **PKCE (Proof Key for Code Exchange):** Implement PKCE to mitigate authorization code interception attacks, especially in mobile and single-page applications.\n*   **OAuth 2.1:** Consider adopting OAuth 2.1, which simplifies and strengthens the OAuth 2.0 specification by incorporating best practices and removing less secure features.\n*   **CIBA (Client Initiated Backchannel Authentication):** Explore CIBA for scenarios where the user authenticates on a separate device (e.g., mobile app) and authorizes access to the application.\n*   **FIDO2/WebAuthn:** Integrate FIDO2/WebAuthn for passwordless authentication, providing a more secure and user-friendly alternative to traditional passwords.\n*   **Dynamic Client Registration:** Use dynamic client registration to automate the process of registering applications with Ping Federate.\n*   **Token Binding:** Implement token binding to prevent token theft and replay attacks.\n*   **Federated Identity Management:** Consider federating identity with other identity providers to support a wider range of users and authentication methods.\n*   **Zero Trust Architecture:** Design the authentication flow with a zero-trust mindset, assuming that no user or device is inherently trusted.\n*   **API Security Best Practices:** Follow API security best practices, such as using JWTs (JSON Web Tokens) for access tokens and implementing proper authorization checks.\n*   **Infrastructure as Code (IaC):** Use IaC tools (e.g., Terraform, CloudFormation) to automate the deployment and configuration of Ping Federate and related infrastructure.\n*   **Observability:** Implement robust logging, monitoring, and tracing to gain visibility into the authentication flow and identify potential issues.\n*   **Security Information and Event Management (SIEM):** Integrate with a SIEM system to detect and respond to security threats related to authentication.\n*   **Use of modern frontend frameworks:** Leverage modern frontend frameworks like React, Angular, or Vue.js to build a responsive and accessible user interface for the authentication flow.\n*   **Secure Token Storage:** Use secure storage mechanisms (e.g., HTTP-only cookies, encrypted local storage) to protect access tokens and refresh tokens on the client-side.",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Backend (Flask) - Implementing the Authorization Code Grant flow with Authlib.  Handles redirect to Ping Federate, token exchange, and token storage.",
+        "code": "from flask import Flask, redirect, session, url_for, request\nfrom authlib.integrations.flask_client import OAuth\nimport os\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Configuration - Replace with your Ping Federate details\nPING_FEDERATE_CLIENT_ID = 'your_client_id'\nPING_FEDERATE_CLIENT_SECRET = 'your_client_secret'\nPING_FEDERATE_AUTHORIZE_URL = 'https://your.pingfederate.com/as/authorization.oauth2'\nPING_FEDERATE_TOKEN_URL = 'https://your.pingfederate.com/as/token.oauth2'\nPING_FEDERATE_USERINFO_ENDPOINT = 'https://your.pingfederate.com/idp/userinfo.openid'\n\noauth = OAuth(app)\n\nping = oauth.register(\n    name='ping',\n    client_id=PING_FEDERATE_CLIENT_ID,\n    client_secret=PING_FEDERATE_CLIENT_SECRET,\n    authorize_url=PING_FEDERATE_AUTHORIZE_URL,\n    token_endpoint=PING_FEDERATE_TOKEN_URL,\n    userinfo_endpoint=PING_FEDERATE_USERINFO_ENDPOINT,  # Optional, if you need user info\n    client_kwargs={'scope': 'openid profile email'},\n)\n\n@app.route('/')\ndef index():\n    if 'user' in session:\n        return f'Logged in as {session[\"user\"]}<br><a href=\"/logout\">Logout</a>'\n    return '<a href=\"/login\">Login with Ping Federate</a>'\n\n@app.route('/login')\ndef login():\n    redirect_uri = url_for('authorize', _external=True)\n    return ping.authorize_redirect(redirect_uri)\n\n@app.route('/authorize')\ndef authorize():\n    try:\n        token = ping.authorize_access_token()\n        resp = ping.get('userinfo')\n        resp.raise_for_status()\n        user_info = resp.json()\n        session['user'] = user_info['sub'] # or another suitable user identifier\n        session['token'] = token # Store the token securely (e.g., encrypted in a database)\n        return redirect('/')\n    except Exception as e:\n        return f'Authentication failed: {e}'\n\n@app.route('/logout')\ndef logout():\n    session.pop('user', None)\n    session.pop('token', None)\n    return redirect('/')\n\n@app.route('/protected')\ndef protected():\n    if 'token' in session:\n        # Example: Use the access token to access a protected resource\n        # This would typically involve making an API call to a resource server\n        # with the access token in the Authorization header.\n        return 'Protected resource accessed!'\n    else:\n        return 'Unauthorized. Please login.'\n\nif __name__ == '__main__':\n    app.run(debug=True, ssl_context='adhoc') # Use a proper SSL certificate in production"
+      },
+      {
+        "language": "javascript",
+        "description": "Frontend (React) -  Basic example of handling the redirect back from Ping Federate.  In a real application, you'd likely use a more robust routing solution and handle token storage more securely.",
+        "code": "import React, { useEffect, useState } from 'react';\n\nfunction App() {\n  const [loggedIn, setLoggedIn] = useState(false);\n  const [user, setUser] = useState(null);\n\n  useEffect(() => {\n    // Check if there's a code in the URL (redirect from Ping Federate)\n    const urlParams = new URLSearchParams(window.location.search);\n    const code = urlParams.get('code');\n\n    if (code) {\n      // Send the code to the backend to exchange for a token\n      fetch('/authorize?code=' + code) // Adjust the endpoint if needed\n        .then(response => response.json())\n        .then(data => {\n          if (data.success) {\n            setLoggedIn(true);\n            setUser(data.user);\n            // Clear the code from the URL\n            window.history.replaceState({}, document.title, window.location.pathname);\n          } else {\n            console.error('Authentication failed:', data.error);\n          }\n        })\n        .catch(error => {\n          console.error('Error during authentication:', error);\n        });\n    } else {\n        // Check if the user is already logged in (e.g., check for a token in local storage)\n        // This is a simplified example; in a real app, you'd have a more robust session management system.\n        // For example, you might have an API endpoint to validate the token.\n        // const storedToken = localStorage.getItem('accessToken');\n        // if (storedToken) {\n        //   setLoggedIn(true);\n        //   // Fetch user data using the token\n        // }\n    }\n  }, []);\n\n  const handleLogin = () => {\n    // Redirect to the backend login route, which will redirect to Ping Federate\n    window.location.href = '/login'; // Adjust the endpoint if needed\n  };\n\n  return (\n    <div>\n      <h1>My App</h1>\n      {\n        loggedIn ? (\n          <div>\n            <p>Welcome, {user ? user.name : 'User'}!</p>\n            {/* Display protected content */}\n          </div>\n        ) : (\n          <button onClick={handleLogin}>Login with Ping Federate</button>\n        )\n      }\n    </div>\n  );\n}\n\nexport default App;"
+      },
+      {
+        "language": "python",
+        "description": "Backend (Flask) - Demonstrates error handling and token refresh.  Includes a basic token refresh endpoint.",
+        "code": "from flask import Flask, redirect, session, url_for, request, jsonify\nfrom authlib.integrations.flask_client import OAuth\nimport os\nimport time\n\napp = Flask(__name__)\napp.secret_key = os.urandom(24)\n\n# Configuration - Replace with your Ping Federate details\nPING_FEDERATE_CLIENT_ID = 'your_client_id'\nPING_FEDERATE_CLIENT_SECRET = 'your_client_secret'\nPING_FEDERATE_AUTHORIZE_URL = 'https://your.pingfederate.com/as/authorization.oauth2'\nPING_FEDERATE_TOKEN_URL = 'https://your.pingfederate.com/as/token.oauth2'\nPING_FEDERATE_USERINFO_ENDPOINT = 'https://your.pingfederate.com/idp/userinfo.openid'\n\noauth = OAuth(app)\n\nping = oauth.register(\n    name='ping',\n    client_id=PING_FEDERATE_CLIENT_ID,\n    client_secret=PING_FEDERATE_CLIENT_SECRET,\n    authorize_url=PING_FEDERATE_AUTHORIZE_URL,\n    token_endpoint=PING_FEDERATE_TOKEN_URL,\n    userinfo_endpoint=PING_FEDERATE_USERINFO_ENDPOINT,  # Optional, if you need user info\n    client_kwargs={'scope': 'openid profile email offline_access'},\n)\n\n@app.route('/refresh_token')\ndef refresh_token():\n    if 'token' not in session:\n        return jsonify({'error': 'No token found'}), 401\n\n    token = session['token']\n    if 'refresh_token' not in token:\n        return jsonify({'error': 'No refresh token found'}), 400\n\n    try:\n        new_token = ping.refresh_token(token_url=PING_FEDERATE_TOKEN_URL, refresh_token=token['refresh_token'])\n        session['token'] = new_token\n        return jsonify({'access_token': new_token['access_token']}), 200\n    except Exception as e:\n        print(f\"Token refresh failed: {e}\")\n        return jsonify({'error': str(e)}), 500\n\n@app.route('/protected')\ndef protected():\n    if 'token' in session:\n        token = session['token']\n        # Check if the token is expired (simplified check)\n        if token['expires_at'] < time.time():\n            # Attempt to refresh the token\n            try:\n                new_token = ping.refresh_token(token_url=PING_FEDERATE_TOKEN_URL, refresh_token=token['refresh_token'])\n                session['token'] = new_token\n                token = new_token # Update the token variable\n            except Exception as e:\n                print(f\"Token refresh failed: {e}\")\n                return 'Unauthorized. Please login. Token refresh failed.', 401\n\n        # Example: Use the access token to access a protected resource\n        # This would typically involve making an API call to a resource server\n        # with the access token in the Authorization header.\n        return 'Protected resource accessed!'\n    else:\n        return 'Unauthorized. Please login.', 401\n\nif __name__ == '__main__':\n    app.run(debug=True, ssl_context='adhoc') # Use a proper SSL certificate in production"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Authorization Code Grant Flow",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am an application user"
+          },
+          {
+            "keyword": "When",
+            "text": "I navigate to the application"
+          },
+          {
+            "keyword": "Then",
+            "text": "I am redirected to Ping Federate for authentication"
+          },
+          {
+            "keyword": "When",
+            "text": "I enter my valid Active Directory credentials and submit"
+          },
+          {
+            "keyword": "Then",
+            "text": "I am redirected back to the application with an authorization code"
+          },
+          {
+            "keyword": "And",
+            "text": "The application exchanges the authorization code for an access token and refresh token"
+          },
+          {
+            "keyword": "And",
+            "text": "I am logged into the application"
+          },
+          {
+            "keyword": "And",
+            "text": "I can access protected resources using the access token"
+          }
+        ]
+      },
+      {
+        "name": "Invalid Credentials at Ping Federate",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am an application user"
+          },
+          {
+            "keyword": "When",
+            "text": "I navigate to the application"
+          },
+          {
+            "keyword": "Then",
+            "text": "I am redirected to Ping Federate for authentication"
+          },
+          {
+            "keyword": "When",
+            "text": "I enter invalid Active Directory credentials and submit"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate displays an authentication error message"
+          },
+          {
+            "keyword": "And",
+            "text": "I am not redirected back to the application"
+          },
+          {
+            "keyword": "And",
+            "text": "I remain on the Ping Federate login page"
+          }
+        ]
+      },
+      {
+        "name": "Authorization Code Expired",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am an application user and have been redirected back to the application with an authorization code"
+          },
+          {
+            "keyword": "When",
+            "text": "The application attempts to exchange the authorization code after it has expired"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application receives an error response from Ping Federate indicating the code is invalid or expired"
+          },
+          {
+            "keyword": "And",
+            "text": "The application redirects me to the login page to re-authenticate"
+          },
+          {
+            "keyword": "And",
+            "text": "An error message is displayed indicating the session has expired"
+          }
+        ]
+      },
+      {
+        "name": "Refresh Token Flow",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am an authenticated application user with a valid access token and refresh token"
+          },
+          {
+            "keyword": "When",
+            "text": "My access token expires"
+          },
+          {
+            "keyword": "And",
+            "text": "The application automatically uses the refresh token to request a new access token"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application successfully obtains a new access token and refresh token"
+          },
+          {
+            "keyword": "And",
+            "text": "I can continue to access protected resources without being prompted to re-authenticate"
+          }
+        ]
+      },
+      {
+        "name": "Accessibility - Screen Reader Compatibility",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "I am an application user using a screen reader"
+          },
+          {
+            "keyword": "When",
+            "text": "I navigate to the application"
+          },
+          {
+            "keyword": "Then",
+            "text": "The screen reader announces that I am being redirected to Ping Federate for authentication"
+          },
+          {
+            "keyword": "And",
+            "text": "The Ping Federate login page is properly labeled and navigable using the screen reader"
+          },
+          {
+            "keyword": "And",
+            "text": "The screen reader announces any error messages or instructions clearly"
+          },
+          {
+            "keyword": "And",
+            "text": "After successful authentication, the screen reader announces that I am being redirected back to the application"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is accessible and usable with the screen reader after authentication"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-3",
+    "title": "User Story - Integrate with Active Directory to Retrieve User Details",
+    "type": "User Story",
+    "description": {
+      "role": "Application",
+      "goal": "Retrieve user details from Active Directory after successful authentication via Ping Federate.",
+      "benefit": "Allows the application to personalize the user experience and enforce access control policies based on user attributes.",
+      "formatted": "As an Application, I want to retrieve user details from Active Directory after successful authentication via Ping Federate, so that I can personalize the user experience and enforce access control policies based on user attributes."
+    },
+    "technical_domain": "Active Directory Integration",
+    "complexity": "Medium",
+    "business_value": "Medium",
+    "story_points": 3,
+    "required_skills": [
+      "Python",
+      "LDAP or Microsoft Graph API",
+      "Active Directory",
+      "Ping Federate"
+    ],
+    "suggested_assignee": "Backend Developer",
+    "dependencies": [
+      "User Story - Implement OAuth 2.0 Client Credentials Grant for Machine-to-Machine Authentication",
+      "User Story - Implement Authorization Code Grant Flow for Human-to-Machine Authentication"
+    ],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Currently, the application lacks the ability to personalize the user experience and enforce granular access control policies. Without Active Directory integration, the application relies solely on the authentication provided by Ping Federate, which typically only provides basic user identity. This results in a generic user experience, limited access control capabilities, and potential security vulnerabilities due to the inability to leverage user attributes stored in Active Directory. Manual user provisioning and management become necessary, increasing administrative overhead and the risk of errors. Auditing and compliance are also hindered due to the lack of detailed user information within the application.",
+      "success_metrics": "1. **Retrieval Success Rate:** Percentage of successful user attribute retrievals from Active Directory after successful Ping Federate authentication (target: >99.9%).\n2. **Latency:** Average time taken to retrieve user attributes from Active Directory (target: < 500ms).\n3. **Error Rate:** Percentage of failed attribute retrieval attempts due to Active Directory unavailability or other errors (target: < 0.1%).\n4. **Attribute Mapping Accuracy:** Percentage of correctly mapped Active Directory attributes to application user attributes (target: 100%).\n5. **Application Performance Impact:** Measure the impact of Active Directory integration on application response times and resource utilization (target: minimal impact, e.g., < 5% increase in average response time).\n6. **Security Compliance:** Ensure adherence to security policies and compliance requirements related to Active Directory access and data handling (target: full compliance).\n7. **User Satisfaction:** Measure user satisfaction with the personalized experience enabled by Active Directory integration (target: positive feedback through surveys or user testing).",
+      "similar_implementations": "1. **LDAP Libraries:** Python libraries like `ldap3` or `python-ldap` are commonly used for LDAP integration. Examples and documentation are readily available online.\n2. **Microsoft Graph API SDKs:** Microsoft provides official SDKs for various languages, including Python, for interacting with the Graph API. These SDKs simplify authentication and data retrieval.\n3. **Ping Federate Integration Kits:** Ping Identity offers integration kits and documentation for connecting Ping Federate with various applications and identity providers, including Active Directory.\n4. **OpenID Connect (OIDC) UserInfo Endpoint:** Many applications use the OIDC UserInfo endpoint to retrieve user attributes after authentication. This approach can be adapted to retrieve attributes from Active Directory.\n5. **Commercial IAM Solutions:** Solutions like Okta, Azure AD, and AWS IAM provide built-in Active Directory integration capabilities.\n6. **Example Code Repositories:** GitHub and other code repositories contain numerous examples of Active Directory integration using Python and various APIs.",
+      "modern_approaches": "1. **Microsoft Graph API:** Favor Microsoft Graph API over LDAP for modern Active Directory integration due to its RESTful interface, improved security, and broader feature set. Graph API also supports modern authentication protocols like OAuth 2.0 and OpenID Connect.\n2. **OAuth 2.0 and OpenID Connect:** Leverage OAuth 2.0 and OpenID Connect for secure authentication and authorization between the application, Ping Federate, and Active Directory.\n3. **Infrastructure as Code (IaC):** Use IaC tools like Terraform or Ansible to automate the deployment and configuration of Active Directory integration components.\n4. **Secrets Management:** Employ secure secrets management solutions like HashiCorp Vault, AWS Secrets Manager, or Azure Key Vault to store Active Directory credentials securely.\n5. **Zero Trust Architecture:** Implement a Zero Trust security model, verifying every user and device before granting access to resources.\n6. **Microservices Architecture:** Design the Active Directory integration as a microservice to improve scalability, maintainability, and fault tolerance.\n7. **Containerization and Orchestration:** Use Docker and Kubernetes to containerize and orchestrate the Active Directory integration service.\n8. **Observability:** Implement comprehensive logging, monitoring, and tracing to gain insights into the performance and health of the Active Directory integration.\n9. **Attribute-Based Access Control (ABAC):** Implement ABAC policies based on user attributes retrieved from Active Directory to enforce fine-grained access control.\n10. **Caching:** Implement caching mechanisms to reduce the load on Active Directory and improve performance. Consider using a distributed cache like Redis or Memcached.",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "python",
+        "description": "Demonstrates connecting to Active Directory using LDAP and retrieving user attributes.  Uses a context manager for connection handling and parameterized queries to prevent LDAP injection.",
+        "code": "import ldap\nimport ldap.sasl\n\nclass ADConnector:\n    def __init__(self, server, base_dn, bind_dn, bind_password):\n        self.server = server\n        self.base_dn = base_dn\n        self.bind_dn = bind_dn\n        self.bind_password = bind_password\n        self.conn = None\n\n    def __enter__(self):\n        try:\n            self.conn = ldap.initialize(self.server)\n            self.conn.set_option(ldap.OPT_REFERRALS, 0)\n            self.conn.simple_bind_s(self.bind_dn, self.bind_password)\n            return self.conn\n        except ldap.LDAPError as e:\n            print(f\"LDAP Connection Error: {e}\")\n            raise\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        if self.conn:\n            self.conn.unbind_s()\n\n    def get_user_details(self, username):\n        search_filter = f'(&(objectClass=user)(sAMAccountName=%s))' % username\n        attributes = ['sAMAccountName', 'mail', 'department', 'displayName']\n\n        with self as conn:\n            try:\n                results = conn.search_s(self.base_dn, ldap.SCOPE_SUBTREE, search_filter, attributes)\n                if results:\n                    dn, attrs = results[0]\n                    return {\n                        'user_id': attrs['sAMAccountName'][0].decode('utf-8'),\n                        'email': attrs.get('mail', [b''])[0].decode('utf-8'),\n                        'department': attrs.get('department', [b''])[0].decode('utf-8'),\n                        'display_name': attrs.get('displayName', [b''])[0].decode('utf-8')\n                    }\n                else:\n                    return None\n            except ldap.LDAPError as e:\n                print(f\"LDAP Search Error: {e}\")\n                return None\n\n# Example Usage (replace with your actual values)\nSERVER = 'ldap://your.ad.server'\nBASE_DN = 'DC=your,DC=domain,DC=com'\nBIND_DN = 'CN=Bind User,CN=Users,DC=your,DC=domain,DC=com'\nBIND_PASSWORD = 'your_bind_password'\n\nad_connector = ADConnector(SERVER, BASE_DN, BIND_DN, BIND_PASSWORD)\n\nuser_details = ad_connector.get_user_details('testuser')\n\nif user_details:\n    print(f\"User Details: {user_details}\")\nelse:\n    print(\"User not found.\")"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates integration with Ping Federate by retrieving the username from the request headers (assuming Ping Federate is configured to pass it) and then using that username to query Active Directory.  Includes error handling for missing headers.",
+        "code": "from flask import Flask, request, jsonify\nimport ldap\n\napp = Flask(__name__)\n\n# Replace with your actual Active Directory configuration\nSERVER = 'ldap://your.ad.server'\nBASE_DN = 'DC=your,DC=domain,DC=com'\nBIND_DN = 'CN=Bind User,CN=Users,DC=your,DC=domain,DC=com'\nBIND_PASSWORD = 'your_bind_password'\n\n\ndef get_user_details_from_ad(username):\n    try:\n        conn = ldap.initialize(SERVER)\n        conn.simple_bind_s(BIND_DN, BIND_PASSWORD)\n        search_filter = f'(&(objectClass=user)(sAMAccountName=%s))' % username\n        attributes = ['sAMAccountName', 'mail', 'department', 'displayName']\n        results = conn.search_s(BASE_DN, ldap.SCOPE_SUBTREE, search_filter, attributes)\n        conn.unbind_s()\n\n        if results:\n            dn, attrs = results[0]\n            return {\n                'user_id': attrs['sAMAccountName'][0].decode('utf-8'),\n                'email': attrs.get('mail', [b''])[0].decode('utf-8'),\n                'department': attrs.get('department', [b''])[0].decode('utf-8'),\n                'display_name': attrs.get('displayName', [b''])[0].decode('utf-8')\n            }\n        else:\n            return None\n    except ldap.LDAPError as e:\n        print(f\"LDAP Error: {e}\")\n        return None\n\n@app.route('/userinfo')\ndef userinfo():\n    try:\n        username = request.headers['X-PingFederate-Username'] # Assuming Ping Federate passes username in this header\n    except KeyError:\n        return jsonify({'error': 'Username not found in request headers'}), 400\n\n    user_details = get_user_details_from_ad(username)\n\n    if user_details:\n        return jsonify(user_details)\n    else:\n        return jsonify({'error': 'User not found in Active Directory'}), 404\n\nif __name__ == '__main__':\n    app.run(debug=True)"
+      },
+      {
+        "language": "python",
+        "description": "Demonstrates error handling for Active Directory unavailability and invalid credentials.  Includes logging for debugging purposes.",
+        "code": "import ldap\nimport logging\n\n# Configure logging\nlogging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')\n\nclass ADConnector:\n    def __init__(self, server, base_dn, bind_dn, bind_password):\n        self.server = server\n        self.base_dn = base_dn\n        self.bind_dn = bind_dn\n        self.bind_password = bind_password\n        self.conn = None\n\n    def __enter__(self):\n        try:\n            self.conn = ldap.initialize(self.server)\n            self.conn.set_option(ldap.OPT_REFERRALS, 0)\n            self.conn.simple_bind_s(self.bind_dn, self.bind_password)\n            return self.conn\n        except ldap.INVALID_CREDENTIALS as e:\n            logging.error(f\"Invalid LDAP Credentials: {e}\")\n            raise\n        except ldap.SERVER_DOWN as e:\n            logging.error(f\"LDAP Server Down: {e}\")\n            raise\n        except ldap.LDAPError as e:\n            logging.error(f\"LDAP Connection Error: {e}\")\n            raise\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        if self.conn:\n            try:\n                self.conn.unbind_s()\n            except ldap.LDAPError as e:\n                logging.error(f\"Error unbinding from LDAP: {e}\")\n\n    def get_user_details(self, username):\n        search_filter = f'(&(objectClass=user)(sAMAccountName=%s))' % username\n        attributes = ['sAMAccountName', 'mail', 'department', 'displayName']\n\n        with self as conn:\n            try:\n                results = conn.search_s(self.base_dn, ldap.SCOPE_SUBTREE, search_filter, attributes)\n                if results:\n                    dn, attrs = results[0]\n                    return {\n                        'user_id': attrs['sAMAccountName'][0].decode('utf-8'),\n                        'email': attrs.get('mail', [b''])[0].decode('utf-8'),\n                        'department': attrs.get('department', [b''])[0].decode('utf-8'),\n                        'display_name': attrs.get('displayName', [b''])[0].decode('utf-8')\n                    }\n                else:\n                    return None\n            except ldap.NO_SUCH_OBJECT as e:\n                logging.warning(f\"User not found in LDAP: {username} - {e}\")\n                return None\n            except ldap.LDAPError as e:\n                logging.error(f\"LDAP Search Error: {e}\")\n                return None\n\n# Example Usage (replace with your actual values)\nSERVER = 'ldap://your.ad.server'\nBASE_DN = 'DC=your,DC=domain,DC=com'\nBIND_DN = 'CN=Bind User,CN=Users,DC=your,DC=domain,DC=com'\nBIND_PASSWORD = 'your_bind_password'\n\nad_connector = ADConnector(SERVER, BASE_DN, BIND_DN, BIND_PASSWORD)\n\ntry:\n    user_details = ad_connector.get_user_details('testuser')\n\n    if user_details:\n        print(f\"User Details: {user_details}\")\n    else:\n        print(\"User not found.\")\nexcept ldap.LDAPError as e:\n    print(f\"An error occurred: {e}\")"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successfully retrieve user details from Active Directory after Ping Federate authentication",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is successfully authenticated via Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application has a valid OAuth 2.0 access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests user details from Active Directory using the user's identity"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application successfully retrieves the user's attributes (user ID, email, department) from Active Directory"
+          },
+          {
+            "keyword": "And",
+            "text": "the retrieved attributes are correctly mapped to the application's user attributes"
+          }
+        ]
+      },
+      {
+        "name": "Handle Active Directory unavailability",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is successfully authenticated via Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application has a valid OAuth 2.0 access token"
+          },
+          {
+            "keyword": "And",
+            "text": "Active Directory is unavailable"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests user details from Active Directory using the user's identity"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application displays an appropriate error message indicating Active Directory is unavailable"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the error for investigation"
+          }
+        ]
+      },
+      {
+        "name": "Handle user not found in Active Directory",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is successfully authenticated via Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application has a valid OAuth 2.0 access token"
+          },
+          {
+            "keyword": "And",
+            "text": "the user's identity does not exist in Active Directory"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests user details from Active Directory using the user's identity"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application displays an appropriate error message indicating the user was not found"
+          },
+          {
+            "keyword": "And",
+            "text": "the application logs the error for investigation"
+          }
+        ]
+      },
+      {
+        "name": "Verify performance of Active Directory user retrieval",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the user is successfully authenticated via Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application has a valid OAuth 2.0 access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests user details from Active Directory using the user's identity"
+          },
+          {
+            "keyword": "Then",
+            "text": "the application retrieves the user's attributes from Active Directory within an acceptable timeframe (e.g., less than 500ms)"
+          }
+        ]
+      },
+      {
+        "name": "Verify secure retrieval of user details from Active Directory",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "the application is configured to connect to Active Directory using secure credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "the user is successfully authenticated via Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "the application has a valid OAuth 2.0 access token"
+          },
+          {
+            "keyword": "When",
+            "text": "the application requests user details from Active Directory using the user's identity"
+          },
+          {
+            "keyword": "Then",
+            "text": "the connection to Active Directory is encrypted using TLS/SSL"
+          },
+          {
+            "keyword": "And",
+            "text": "the Active Directory credentials are not exposed in the application logs or configuration files"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "USER-STORY-4",
+    "title": "User Story - Configure Ping Federate to Trust the Application and Issue Necessary Claims",
+    "type": "User Story",
+    "description": {
+      "role": "System Administrator",
+      "goal": "Configure Ping Federate to trust the application and issue tokens with the required claims.",
+      "benefit": "Ensures that the application can securely authenticate users and access necessary user information.",
+      "formatted": "As a System Administrator, I want to configure Ping Federate to trust the application and issue tokens with the required claims, so that the application can securely authenticate users and access necessary user information."
+    },
+    "technical_domain": "Ping Federate Integration",
+    "complexity": "Medium",
+    "business_value": "High",
+    "story_points": 3,
+    "required_skills": [
+      "Ping Federate",
+      "OAuth 2.0",
+      "Active Directory"
+    ],
+    "suggested_assignee": "System Administrator",
+    "dependencies": [],
+    "acceptance_criteria": [],
+    "implementation_notes": {
+      "technical_considerations": "",
+      "integration_points": "",
+      "accessibility": ""
+    },
+    "research_summary": {
+      "pain_points": "Current pain points addressed by this story include:\n*   **Security Risks:** Without proper configuration, the application might be vulnerable to unauthorized access and data breaches due to weak authentication or insufficient authorization.\n*   **Manual Configuration Errors:** Manual configuration of Ping Federate and the application can lead to inconsistencies and errors, resulting in authentication failures or incorrect claim mappings.\n*   **Lack of Standardization:** Inconsistent claim mappings across different applications can create integration challenges and complicate user management.\n*   **Difficult Troubleshooting:** Debugging authentication and authorization issues can be challenging without proper logging and monitoring.\n*   **Compliance Issues:** Failure to include necessary claims in the access token can lead to compliance violations, especially regarding data privacy and access control.\n*   **User Experience Issues:** Incorrect or missing claims can lead to a degraded user experience, such as limited access to features or incorrect user information displayed in the application.\n*   **Scalability Challenges:** Inefficient configuration can hinder the scalability of the application and the authentication infrastructure.\n*   **Maintenance Overhead:** Manual configuration and lack of automation increase the maintenance overhead and the risk of configuration drift.",
+      "success_metrics": "Specific, measurable metrics to evaluate the success of this story:\n*   **Successful Authentication Rate:** Percentage of successful user authentications through Ping Federate.\n*   **Claim Validation Success Rate:** Percentage of access tokens successfully validated by the application.\n*   **Token Issuance Time:** Average time taken to issue an access token with the required claims.\n*   **Error Rate:** Number of authentication or authorization errors encountered by users.\n*   **Configuration Time:** Time taken to configure Ping Federate and the application.\n*   **Security Vulnerability Scan Results:** Number of security vulnerabilities identified in the authentication and authorization process.\n*   **Compliance Audit Results:** Number of compliance violations identified during audits.\n*   **Application Performance:** Impact of the authentication process on application performance (e.g., response time, CPU usage).\n*   **Documentation Completeness:** Percentage of configuration steps documented.\n*   **Test Coverage:** Percentage of authentication and authorization scenarios covered by automated tests.",
+      "similar_implementations": "Examples of similar implementations, tools, or references that can guide this implementation:\n*   **Ping Identity Documentation:** Official Ping Federate documentation provides detailed instructions and examples for configuring trusted clients and issuing claims.\n*   **OAuth 2.0 and OpenID Connect Specifications:** These specifications define the standards for authentication and authorization, including claim formats and token validation.\n*   **Example Ping Federate Configurations:** Ping Identity often provides example configurations for common use cases, such as integrating with Active Directory or other identity providers.\n*   **Community Forums and Blogs:** Online forums and blogs dedicated to Ping Federate and identity management can provide valuable insights and troubleshooting tips.\n*   **Identity Management Platforms:** Other identity management platforms, such as Okta, Azure AD, and Auth0, offer similar functionality for configuring trusted applications and issuing claims.\n*   **Reference Architectures:** Ping Identity and other vendors provide reference architectures for deploying Ping Federate in various environments.\n*   **Sample Applications:** Sample applications that demonstrate how to integrate with Ping Federate and validate access tokens can be helpful for understanding the implementation process.\n*   **PingFederate SDKs:** PingFederate SDKs provide tools and libraries to simplify the integration process.",
+      "modern_approaches": "Current (2024-2025) best practices, patterns, and modern approaches relevant to this story:\n*   **Infrastructure as Code (IaC):** Using tools like Terraform or Ansible to automate the configuration of Ping Federate and the application, ensuring consistency and repeatability.\n*   **Containerization and Orchestration:** Deploying Ping Federate in containers (e.g., Docker) and orchestrating them with Kubernetes for scalability and resilience.\n*   **Zero Trust Architecture:** Implementing a zero-trust architecture, where every request is authenticated and authorized, regardless of the user's location or device.\n*   **API Security:** Securing APIs with OAuth 2.0 and OpenID Connect, using Ping Federate as the authorization server.\n*   **Dynamic Client Registration:** Using dynamic client registration to automate the onboarding of new applications.\n*   **Risk-Based Authentication:** Implementing risk-based authentication to adapt the authentication process based on the user's behavior and context.\n*   **Federated Identity Management:** Integrating with other identity providers to enable single sign-on (SSO) across multiple applications and domains.\n*   **Attribute-Based Access Control (ABAC):** Using ABAC to define access control policies based on user attributes, resource attributes, and environmental conditions.\n*   **Continuous Integration and Continuous Delivery (CI/CD):** Automating the deployment and testing of Ping Federate configurations using CI/CD pipelines.\n*   **Monitoring and Logging:** Implementing comprehensive monitoring and logging to detect and troubleshoot authentication and authorization issues.\n*   **Modern Authentication Protocols:** Utilizing modern authentication protocols like FIDO2 for passwordless authentication.\n*   **DevSecOps:** Integrating security practices into the development and operations lifecycle to ensure the security of the authentication and authorization process.",
+      "performance_considerations": "",
+      "security_implications": "",
+      "maintenance_aspects": ""
+    },
+    "code_blocks": [
+      {
+        "language": "xml",
+        "description": "Example PingFederate OAuth Client configuration (simplified).  Shows the basic structure for defining a client and its allowed grant types.",
+        "code": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<pf:oauth-client xmlns:pf=\"http://pingidentity.com/2009/06/pf\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://pingidentity.com/2009/06/pf oauth-client.xsd\">\n  <clientId>your_application_client_id</clientId>\n  <name>Your Application Name</name>\n  <description>OAuth client for Your Application.</description>\n  <clientSecret>your_application_client_secret</clientSecret>\n  <redirectUris>\n    <redirectUri>https://your-application.example.com/callback</redirectUri>\n  </redirectUris>\n  <grantTypes>\n    <grantType>AUTHORIZATION_CODE</grantType>\n    <grantType>REFRESH_TOKEN</grantType>\n  </grantTypes>\n  <responseTypes>\n    <responseType>CODE</responseType>\n  </responseTypes>\n  <scopes>\n    <scope>openid</scope>\n    <scope>profile</scope>\n    <scope>email</scope>\n  </scopes>\n  <accessTokenManagerRef>your_access_token_manager</accessTokenManagerRef>\n  <refreshTokenManagerRef>your_refresh_token_manager</refreshTokenManagerRef>\n</pf:oauth-client>"
+      },
+      {
+        "language": "java",
+        "description": "Example Java code to validate the JWT access token claims. Demonstrates verifying the issuer, audience, and checking for required claims.",
+        "code": "import com.nimbusds.jose.JOSEException;\nimport com.nimbusds.jose.JWSAlgorithm;\nimport com.nimbusds.jose.JWSObject;\nimport com.nimbusds.jose.jwk.source.RemoteJWKSet;\nimport com.nimbusds.jose.proc.JWSKeySelector;\nimport com.nimbusds.jose.proc.JWSVerificationKeySelector;\nimport com.nimbusds.jose.proc.SecurityContext;\nimport com.nimbusds.jwt.JWTClaimsSet;\nimport com.nimbusds.jwt.proc.DefaultJWTProcessor;\nimport java.net.URL;\nimport java.text.ParseException;\n\npublic class TokenValidator {\n\n    public static boolean validateToken(String token, String jwksUri, String expectedIssuer, String expectedAudience) {\n        try {\n            JWSObject jwsObject = JWSObject.parse(token);\n            JWSAlgorithm algorithm = jwsObject.getHeader().getAlgorithm();\n\n            URL jwkSetURL = new URL(jwksUri);\n            RemoteJWKSet<SecurityContext> jwkSource = new RemoteJWKSet<>(jwkSetURL);\n\n            JWSKeySelector<SecurityContext> keySelector = new JWSVerificationKeySelector<>(algorithm, jwkSource);\n            DefaultJWTProcessor jwtProcessor = new DefaultJWTProcessor();\n            jwtProcessor.setJWSKeySelector(keySelector);\n\n            JWTClaimsSet claimsSet = jwtProcessor.process(token, null);\n\n            if (!expectedIssuer.equals(claimsSet.getIssuer())) {\n                System.err.println(\"Invalid issuer: \" + claimsSet.getIssuer());\n                return false;\n            }\n\n            if (!claimsSet.getAudience().contains(expectedAudience)) {\n                System.err.println(\"Invalid audience: \" + claimsSet.getAudience());\n                return false;\n            }\n\n            if (claimsSet.getClaim(\"user_id\") == null) {\n                System.err.println(\"Missing user_id claim\");\n                return false;\n            }\n\n            return true;\n\n        } catch (ParseException | JOSEException e) {\n            System.err.println(\"Token validation failed: \" + e.getMessage());\n            return false;\n        } catch (Exception e) {\n            System.err.println(\"Unexpected error during token validation: \" + e.getMessage());\n            return false;\n        }\n    }\n\n    public static void main(String[] args) {\n        // Example usage (replace with your actual values)\n        String token = \"your_access_token\";\n        String jwksUri = \"https://your-pingfederate-server.example.com/.well-known/jwks.json\";\n        String expectedIssuer = \"https://your-pingfederate-server.example.com\";\n        String expectedAudience = \"your_application_client_id\";\n\n        boolean isValid = validateToken(token, jwksUri, expectedIssuer, expectedAudience);\n        System.out.println(\"Token is valid: \" + isValid);\n    }\n}"
+      },
+      {
+        "language": "java",
+        "description": "Example of handling errors during claim retrieval from Active Directory. This demonstrates logging and fallback mechanisms.",
+        "code": "import org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\n\nimport javax.naming.Context;\nimport javax.naming.NamingEnumeration;\nimport javax.naming.NamingException;\nimport javax.naming.directory.DirContext;\nimport javax.naming.directory.InitialDirContext;\nimport javax.naming.directory.SearchControls;\nimport javax.naming.directory.SearchResult;\nimport java.util.Hashtable;\n\npublic class ActiveDirectoryClaimRetriever {\n\n    private static final Logger logger = LoggerFactory.getLogger(ActiveDirectoryClaimRetriever.class);\n\n    public String getEmailFromAD(String username) {\n        Hashtable<String, String> env = new Hashtable<>();\n        env.put(Context.INITIAL_CONTEXT_FACTORY, \"com.sun.jndi.ldap.LdapCtxFactory\");\n        env.put(Context.PROVIDER_URL, \"ldap://your-ad-server.example.com:389\");\n        env.put(Context.SECURITY_AUTHENTICATION, \"simple\");\n        env.put(Context.SECURITY_PRINCIPAL, \"your_bind_dn\");\n        env.put(Context.SECURITY_CREDENTIALS, \"your_bind_password\");\n\n        try {\n            DirContext ctx = new InitialDirContext(env);\n            SearchControls searchControls = new SearchControls();\n            searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);\n            String filter = \"(&(objectClass=user)(sAMAccountName=\" + username + \"))\";\n\n            NamingEnumeration<SearchResult> results = ctx.search(\"DC=example,DC=com\", filter, searchControls);\n\n            if (results.hasMore()) {\n                SearchResult searchResult = results.next();\n                String email = (String) searchResult.getAttributes().get(\"mail\").get();\n                ctx.close();\n                return email;\n            } else {\n                logger.warn(\"User not found in Active Directory: {}\", username);\n                ctx.close();\n                return \"default.email@example.com\"; // Fallback email\n            }\n\n        } catch (NamingException e) {\n            logger.error(\"Error retrieving email from Active Directory for user: {}\", username, e);\n            return \"default.email@example.com\"; // Fallback email\n        } catch (Exception e) {\n            logger.error(\"Unexpected error retrieving email from Active Directory for user: {}\", username, e);\n            return \"default.email@example.com\"; // Fallback email\n        }\n    }\n\n    public static void main(String[] args) {\n        ActiveDirectoryClaimRetriever retriever = new ActiveDirectoryClaimRetriever();\n        String email = retriever.getEmailFromAD(\"testuser\");\n        System.out.println(\"Email: \" + email);\n    }\n}"
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Successful Configuration and Token Issuance",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is running and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is registered as a client in Ping Federate with the correct client ID and secret"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured to connect to Active Directory"
+          },
+          {
+            "keyword": "And",
+            "text": "Claim mappings are configured in Ping Federate to map Active Directory attributes (user ID, email, roles) to corresponding claims"
+          },
+          {
+            "keyword": "When",
+            "text": "The application requests an access token from Ping Federate using valid credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate issues an access token"
+          },
+          {
+            "keyword": "And",
+            "text": "The access token contains the configured claims (user ID, email, roles) with correct values"
+          },
+          {
+            "keyword": "And",
+            "text": "The application successfully validates the access token and extracts the claims"
+          }
+        ]
+      },
+      {
+        "name": "Invalid Client Credentials",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is running and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is registered as a client in Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "The application requests an access token from Ping Federate using an invalid client ID or secret"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate rejects the request and returns an error indicating invalid client credentials"
+          },
+          {
+            "keyword": "And",
+            "text": "No access token is issued"
+          }
+        ]
+      },
+      {
+        "name": "Missing Required Claims Configuration",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is running and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is registered as a client in Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured to connect to Active Directory"
+          },
+          {
+            "keyword": "And",
+            "text": "Claim mappings are NOT configured for all required claims (e.g., email is missing)"
+          },
+          {
+            "keyword": "When",
+            "text": "The application requests an access token from Ping Federate using valid credentials"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate issues an access token"
+          },
+          {
+            "keyword": "And",
+            "text": "The access token is missing the configured claim (e.g., email)"
+          },
+          {
+            "keyword": "And",
+            "text": "The application logs an error indicating the missing claim"
+          }
+        ]
+      },
+      {
+        "name": "Token Issuance Performance Under Load",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is running and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is registered as a client in Ping Federate"
+          },
+          {
+            "keyword": "When",
+            "text": "The application simulates 100 concurrent requests for access tokens from Ping Federate"
+          },
+          {
+            "keyword": "Then",
+            "text": "Ping Federate issues all 100 access tokens within 5 seconds"
+          },
+          {
+            "keyword": "And",
+            "text": "The average response time for token issuance is less than 50 milliseconds"
+          }
+        ]
+      },
+      {
+        "name": "Token Security - Token Expiry and Revocation",
+        "steps": [
+          {
+            "keyword": "Given",
+            "text": "Ping Federate is running and accessible"
+          },
+          {
+            "keyword": "And",
+            "text": "The application is registered as a client in Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "Ping Federate is configured with a token expiry time of 1 hour"
+          },
+          {
+            "keyword": "When",
+            "text": "The application requests and receives an access token"
+          },
+          {
+            "keyword": "And",
+            "text": "The application attempts to use the token after 1 hour and 5 minutes"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application receives an error indicating the token has expired"
+          },
+          {
+            "keyword": "When",
+            "text": "A system administrator revokes the access token in Ping Federate"
+          },
+          {
+            "keyword": "And",
+            "text": "The application attempts to use the revoked token"
+          },
+          {
+            "keyword": "Then",
+            "text": "The application receives an error indicating the token is invalid or revoked"
+          }
+        ]
+      }
+    ]
+  }
+]

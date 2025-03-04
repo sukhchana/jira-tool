@@ -1,9 +1,13 @@
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel
 
 
 class ResearchSummary(BaseModel):
-    """Research summary for a user story"""
-    pain_points: str = Field(..., description="Current pain points this story addresses")
-    success_metrics: str = Field(..., description="Metrics to measure success")
-    similar_implementations: str = Field(..., description="Similar implementations or references")
-    modern_approaches: str = Field(..., description="Modern approaches and best practices to consider") 
+    """Model for research summary structure"""
+    pain_points: str
+    success_metrics: str
+    similar_implementations: str
+    modern_approaches: str
+    performance_considerations: Optional[str] = ""
+    security_implications: Optional[str] = ""
+    maintenance_aspects: Optional[str] = "" 

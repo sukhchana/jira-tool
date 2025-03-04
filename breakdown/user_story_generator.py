@@ -1,4 +1,6 @@
 from typing import Dict, Any, List
+import asyncio
+from asyncio import Semaphore
 
 from loguru import logger
 
@@ -18,6 +20,7 @@ from services.execution_log_service import ExecutionLogService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
 from utils.config import settings
+from utils.json_sanitizer import JSONSanitizer
 
 
 class UserStoryGenerator:
@@ -34,18 +37,17 @@ class UserStoryGenerator:
             proposed_tickets: ProposedTicketsService
     ) -> List[UserStory]:
         """
-        Generate user stories based on epic analysis.
+        Generate user stories based on the epic analysis.
         
         Args:
-            epic_analysis: Structured analysis of the epic
-            task_tracker: TaskTracker instance to track tasks
+            epic_analysis: Analysis information about the epic
+            task_tracker: TaskTracker instance
             proposed_tickets: ProposedTicketsService instance
             
         Returns:
-            List of generated user stories
-        
+            List of UserStory objects
+            
         Raises:
-            ValueError: If story parsing fails
             Exception: If tracking operations fail
         """
         logger.info("Starting user story generation process")
@@ -85,25 +87,76 @@ class UserStoryGenerator:
                 raise  # Re-raise ValueError
 
             logger.info(f"Successfully parsed {len(parsed_stories)} user stories")
-
-            # Process each user story
-            for idx, story in enumerate(parsed_stories, 1):
-                story_title = story.get("title", f"Story #{idx}")
-                logger.info(f"Processing user story {idx}/{len(parsed_stories)}: {story_title}")
-
+            
+            # Enrich and process user stories in parallel
+            enriched_stories = await self._enrich_user_stories_parallel(parsed_stories)
+            
+            # Add enriched stories to tracking systems
+            for user_story in enriched_stories:
+                story_title = user_story.title
+                logger.info(f"Adding {story_title} to task tracker and proposed tickets")
                 try:
-                    # Generate additional components
-                    logger.info(f"Generating research summary for {story_title}")
-                    research_summary = await self._generate_research_summary(story)
+                    task_tracker.add_user_story(user_story.model_dump())
+                    story_id = proposed_tickets.add_high_level_task(user_story.model_dump())
+                    user_story.id = story_id
+                except Exception as e:
+                    logger.error(f"Failed to track user story {story_title}: {str(e)}")
+                    raise  # Re-raise tracking error
+                
+                stories.append(user_story)
+                
+                # Log the story generation
+                logger.info(f"Successfully completed generation of {story_title}")
+                self.execution_log.log_llm_interaction(
+                    f"User Story Generation - {user_story.title}",
+                    prompt,
+                    response,
+                    {"user_story": user_story.model_dump()}
+                )
 
-                    logger.info(f"Generating code examples for {story_title}")
-                    code_blocks = await self._generate_code_examples(story)
-                    logger.debug(f"Generated {len(code_blocks)} code examples")
+        except Exception as e:
+            if not isinstance(e, ValueError):  # Don't log LLM interaction for parsing errors
+                logger.error(f"Failed to generate user stories: {str(e)}")
+                self.execution_log.log_llm_interaction(
+                    "User Story Generation",
+                    None,  # No response since an error occurred
+                    str(e)
+                )
+            raise
 
-                    logger.info(f"Generating Gherkin scenarios for {story_title}")
-                    scenarios = await self._generate_gherkin_scenarios(story)
-                    logger.debug(f"Generated {len(scenarios)} Gherkin scenarios")
-
+        return stories
+        
+    async def _enrich_user_stories_parallel(self, parsed_stories: List[Dict[str, Any]], max_concurrency: int = 4) -> List[UserStory]:
+        """
+        Enrich multiple user stories with additional details in parallel.
+        
+        Args:
+            parsed_stories: List of parsed user story dictionaries
+            max_concurrency: Maximum number of concurrent enrichment operations
+            
+        Returns:
+            List of enriched UserStory objects
+        """
+        # Use a semaphore to limit concurrency
+        semaphore = Semaphore(max_concurrency)
+        
+        async def enrich_story(story: Dict[str, Any], idx: int) -> UserStory:
+            async with semaphore:
+                story_title = story.get("title", f"Story #{idx}")
+                logger.info(f"Processing user story {idx}/{len(parsed_stories)} in parallel: {story_title}")
+                
+                try:
+                    # Generate additional components in parallel
+                    research_summary, code_blocks, scenarios = await asyncio.gather(
+                        self._generate_research_summary(story),
+                        self._generate_code_examples(story),
+                        self._generate_gherkin_scenarios(story)
+                    )
+                    
+                    logger.debug(f"Generated research summary for {story_title}")
+                    logger.debug(f"Generated {len(code_blocks)} code examples for {story_title}")
+                    logger.debug(f"Generated {len(scenarios)} Gherkin scenarios for {story_title}")
+                    
                     # Create complete user story
                     logger.info(f"Creating complete user story model for {story_title}")
                     user_story = UserStory(
@@ -119,61 +172,59 @@ class UserStoryGenerator:
                         code_blocks=code_blocks,
                         scenarios=scenarios
                     )
-
-                    # Add to tracking systems
-                    logger.info(f"Adding {story_title} to task tracker and proposed tickets")
-                    try:
-                        task_tracker.add_user_story(user_story.model_dump())
-                        story_id = proposed_tickets.add_high_level_task(user_story.model_dump())
-                        user_story.id = story_id
-                    except Exception as e:
-                        logger.error(f"Failed to track user story {story_title}: {str(e)}")
-                        raise  # Re-raise tracking error
-
-                    # Add to stories list
-                    stories.append(user_story)
-
-                    # Log the story generation
-                    logger.info(f"Successfully completed generation of {story_title}")
-                    self.execution_log.log_llm_interaction(
-                        f"User Story Generation - {user_story.title}",
-                        prompt,
-                        response,
-                        {"user_story": user_story.model_dump()}
-                    )
-
+                    
+                    return user_story
+                    
                 except Exception as e:
                     logger.error(f"Failed to process user story {story_title}: {str(e)}")
                     logger.exception("Full traceback:")
                     raise
-
-        except Exception as e:
-            if not isinstance(e, ValueError):  # Don't log LLM interaction for parsing errors
-                logger.error(f"Failed to generate user stories: {str(e)}")
-                self.execution_log.log_llm_interaction(
-                    "User Story Generation",
-                    None,  # No response since an error occurred
-                    str(e)
-                )
-            raise
-
-        logger.info(f"Completed user story generation. Generated {len(stories)} stories")
-        return stories
+        
+        # Create tasks for all stories
+        tasks = [enrich_story(story, idx) for idx, story in enumerate(parsed_stories, 1)]
+        
+        # Run all tasks and gather results
+        enriched_stories = await asyncio.gather(*tasks)
+        
+        return list(enriched_stories)
 
     async def _generate_research_summary(self, story_context: Dict[str, Any]) -> ResearchSummary:
         """Generate research summary for a user story"""
-        logger.debug(f"Generating research summary for story: {story_context.get('title')}")
+        try:
+            logger.debug(f"Generating research summary for story: {story_context.get('title')}")
 
-        if not settings.ENABLE_RESEARCH_TASKS:
-            logger.debug("Research tasks disabled, skipping LLM call")
-            research_data = ResearchSummaryParser.parse("")
-            return ResearchSummary(**research_data)
+            if not settings.ENABLE_RESEARCH_TASKS:
+                logger.debug("Research tasks disabled, skipping LLM call")
+                return ResearchSummary(
+                    pain_points="",
+                    success_metrics="",
+                    similar_implementations="",
+                    modern_approaches=""
+                )
 
-        prompt = UserStoryPromptBuilder.build_research_prompt(story_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
-        logger.debug("Parsing research summary response")
-        research_data = ResearchSummaryParser.parse(response)
-        return ResearchSummary(**research_data)
+            prompt = UserStoryPromptBuilder.build_research_prompt(story_context)
+            response = await self.llm.generate_content(prompt)
+            logger.debug("Parsing research summary response")
+            raw_data = JSONSanitizer.safe_parse_with_fallback(response)
+            
+            if not raw_data:
+                return ResearchSummary(
+                    pain_points="",
+                    success_metrics="",
+                    similar_implementations="",
+                    modern_approaches=""
+                )
+            
+            return ResearchSummary(**raw_data)
+        except Exception as e:
+            logger.error(f"Failed to generate research summary: {str(e)}")
+            logger.exception("Full traceback:")
+            return ResearchSummary(
+                pain_points="",
+                success_metrics="",
+                similar_implementations="",
+                modern_approaches=""
+            )
 
     async def _generate_code_examples(self, story_context: Dict[str, Any]) -> List[CodeBlock]:
         """Generate code examples for a user story"""
