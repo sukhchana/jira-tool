@@ -92,7 +92,7 @@ if [ -d "$PARENT_JIRA_TOOL" ]; then
         mkdir -p ./llm
         
         # Check and copy specific files
-        for file in c_vertex.py m2m_helper.py vertexinit.py; do
+        for file in c_vertex.py m2m_helper.py vertexinit.py anthropicllm.py; do
             if [ -f "$PARENT_JIRA_TOOL/llm/$file" ]; then
                 echo "Copying $file from parent llm directory..."
                 cp "$PARENT_JIRA_TOOL/llm/$file" ./llm/

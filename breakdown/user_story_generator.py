@@ -19,16 +19,31 @@ from prompts.user_story_prompt_builder import UserStoryPromptBuilder
 from services.execution_log_service import ExecutionLogService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
-from utils.config import settings
+from utils.config import settings, Settings
 from utils.json_sanitizer import JSONSanitizer
+from llm.llm_service_factory import get_llm_service
 
 
 class UserStoryGenerator:
     """Service responsible for generating user stories from epic analysis"""
 
     def __init__(self, execution_log: ExecutionLogService):
-        self.llm = VertexLLM()
+        """Initialize the service with required dependencies"""
         self.execution_log = execution_log
+        self.llm_service = get_llm_service()
+        self.settings = settings  # Default settings
+        
+    def set_config(self, config: Settings):
+        """Override default settings with provided configuration
+        
+        Args:
+            config: Settings object with feature flag settings
+        """
+        if not config:
+            return
+            
+        self.settings = config
+        logger.debug(f"UserStoryGenerator settings updated: {vars(self.settings)}")
 
     async def generate_user_stories(
             self,
@@ -66,7 +81,7 @@ class UserStoryGenerator:
             # Generate base user stories prompt and get LLM response
             logger.info("Generating base user stories from epic analysis")
             prompt = UserStoryPromptBuilder.build_user_stories_prompt(epic_analysis)
-            response = await self.llm.generate_content(prompt, temperature=0.2)
+            response = await self.llm_service.generate_content(prompt, temperature=0.2)
 
             # Debug log the response
             logger.debug("Raw LLM response for user stories:")
@@ -193,7 +208,7 @@ class UserStoryGenerator:
         try:
             logger.debug(f"Generating research summary for story: {story_context.get('title')}")
 
-            if not settings.ENABLE_RESEARCH_TASKS:
+            if not self.settings.ENABLE_RESEARCH_TASKS:
                 logger.debug("Research tasks disabled, skipping LLM call")
                 return ResearchSummary(
                     pain_points="",
@@ -203,7 +218,7 @@ class UserStoryGenerator:
                 )
 
             prompt = UserStoryPromptBuilder.build_research_prompt(story_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing research summary response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response)
             
@@ -230,12 +245,12 @@ class UserStoryGenerator:
         """Generate code examples for a user story"""
         logger.debug(f"Generating code examples for story: {story_context.get('title')}")
 
-        if not settings.ENABLE_CODE_BLOCK_GENERATION:
+        if not self.settings.ENABLE_CODE_BLOCK_GENERATION:
             logger.debug("Code block generation disabled, skipping LLM call")
             return []
 
         prompt = UserStoryPromptBuilder.build_code_examples_prompt(story_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
+        response = await self.llm_service.generate_content(prompt, temperature=0.2)
         logger.debug("Parsing code examples response")
         code_blocks_data = CodeBlockParser.parse(response)
         return [CodeBlock(**block) for block in code_blocks_data]
@@ -244,12 +259,12 @@ class UserStoryGenerator:
         """Generate Gherkin scenarios for a user story"""
         logger.debug(f"Generating Gherkin scenarios for story: {story_context.get('title')}")
 
-        if not settings.ENABLE_GHERKIN_SCENARIOS:
+        if not self.settings.ENABLE_GHERKIN_SCENARIOS:
             logger.debug("Gherkin scenarios disabled, skipping LLM call")
             return []
 
         prompt = UserStoryPromptBuilder.build_gherkin_scenarios_prompt(story_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
+        response = await self.llm_service.generate_content(prompt, temperature=0.2)
         logger.debug("Parsing Gherkin scenarios response")
         scenarios_data = GherkinParser.parse(response)
         return [GherkinScenario(**scenario) for scenario in scenarios_data]

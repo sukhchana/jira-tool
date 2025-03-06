@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 import multiprocessing
 import os
+import time
+from starlette.middleware.base import BaseHTTPMiddleware
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,8 +13,31 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 import os
 
-from routers import jira_router, llm_router
+from routers import jira_router, llm_router, health_router
+from services.metrics_service import setup_metrics
 from utils.logger import logger
+
+
+# Middleware for logging slow requests
+class SlowRequestMiddleware(BaseHTTPMiddleware):
+    """Middleware to log slow requests"""
+    
+    def __init__(self, app, threshold_seconds=5.0):
+        super().__init__(app)
+        self.threshold = threshold_seconds
+    
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+        request_time = time.time() - start_time
+        
+        if request_time > self.threshold:
+            logger.warning(
+                f"SLOW REQUEST: {request.method} {request.url.path} "
+                f"took {request_time:.2f}s (threshold: {self.threshold}s)"
+            )
+        
+        return response
 
 
 @asynccontextmanager
@@ -47,6 +72,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add middleware for monitoring slow requests (threshold: 5 seconds)
+app.add_middleware(SlowRequestMiddleware, threshold_seconds=5.0)
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +83,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Set up Prometheus metrics
+setup_metrics(app)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -69,6 +100,10 @@ app.include_router(
     llm_router.router,
     prefix="/api/v1/llm",
     tags=["llm"]
+)
+app.include_router(
+    health_router.router,
+    tags=["monitoring"]
 )
 
 # Add a route for the mermaid viewer

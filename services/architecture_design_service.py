@@ -6,6 +6,8 @@ import json
 import uuid
 import logging
 import re
+import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 
@@ -435,6 +437,17 @@ class ArchitectureDesignService:
         # Use the first diagram found
         mermaid_code = matches[0].strip()
         
+        # Validate the mermaid diagram
+        is_valid, validation_error = self._validate_mermaid_diagram(mermaid_code)
+        
+        # If diagram is invalid and we have error details, try to fix it with the LLM
+        if not is_valid and validation_error:
+            logger.warning(f"Invalid {diagram_type} diagram detected. Attempting to fix.")
+            fixed_code = self._fix_mermaid_diagram(mermaid_code, validation_error, diagram_type)
+            if fixed_code:
+                logger.info(f"Successfully fixed {diagram_type} diagram")
+                mermaid_code = fixed_code
+        
         # Extract title from the text before/after the diagram
         title = f"{diagram_type.capitalize()} Diagram"
         description = ""
@@ -467,4 +480,222 @@ class ArchitectureDesignService:
             type=diagram_type,
             mermaid_code=f"```mermaid\n{mermaid_code}\n```",
             description=description
-        ) 
+        )
+        
+    def _validate_mermaid_diagram(self, mermaid_code: str) -> tuple[bool, Optional[str]]:
+        """
+        Validate a Mermaid diagram using mermaid-cli.
+        
+        Args:
+            mermaid_code: Mermaid diagram code to validate
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Check if mermaid-cli is installed
+        try:
+            subprocess.run(['mmdc', '--version'], 
+                          stdout=subprocess.PIPE, 
+                          stderr=subprocess.PIPE, 
+                          check=False)
+        except FileNotFoundError:
+            logger.warning("mermaid-cli not found, using basic Python syntax validation instead")
+            return self._basic_syntax_validation(mermaid_code)
+            
+        # Save diagram to a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.mmd', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            temp_file.write(mermaid_code)
+            
+        try:
+            # Use mmdc to check the syntax
+            output_path = f"{temp_file_path}.svg"
+            cmd = [
+                'mmdc',
+                '-i', temp_file_path,
+                '-o', output_path,
+                '-b', 'transparent'
+            ]
+            
+            # Run the command
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False
+            )
+            
+            # Check if the command was successful
+            if result.returncode == 0:
+                return True, None
+            else:
+                error_message = result.stderr
+                return False, error_message
+                
+        except Exception as e:
+            logger.error(f"Error validating Mermaid diagram: {str(e)}")
+            return False, str(e)
+            
+        finally:
+            # Clean up temporary files
+            try:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                if os.path.exists(f"{temp_file_path}.svg"):
+                    os.unlink(f"{temp_file_path}.svg")
+            except Exception as e:
+                logger.error(f"Error cleaning up temporary files: {str(e)}")
+                
+    def _basic_syntax_validation(self, mermaid_code: str) -> tuple[bool, Optional[str]]:
+        """
+        Perform basic syntax validation for Mermaid diagrams when mermaid-cli is not available.
+        This is a simplified validation that checks for common syntax errors.
+        
+        Args:
+            mermaid_code: Mermaid diagram code to validate
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Split the diagram into lines for analysis
+        lines = mermaid_code.strip().split('\n')
+        
+        # Check if the diagram is empty
+        if not lines or not any(line.strip() for line in lines):
+            return False, "Diagram is empty"
+            
+        # Identify diagram type from the first line
+        first_line = lines[0].strip().lower()
+        diagram_types = [
+            "graph", "flowchart", "sequencediagram", "classDiagram", "stateDiagram",
+            "erDiagram", "gantt", "pie", "gitGraph", "journey", "c4diagram"
+        ]
+        
+        diagram_type = None
+        for dt in diagram_types:
+            if first_line.startswith(dt):
+                diagram_type = dt
+                break
+                
+        if not diagram_type:
+            return False, f"Unknown diagram type: '{first_line}'. First line should define diagram type."
+            
+        # Basic bracket/parenthesis matching
+        brackets = {'(': ')', '{': '}', '[': ']'}
+        stack = []
+        
+        for i, line in enumerate(lines):
+            for j, char in enumerate(line):
+                if char in brackets.keys():
+                    stack.append((char, i+1, j+1))  # Store char and position
+                elif char in brackets.values():
+                    if not stack:
+                        return False, f"Unexpected closing bracket '{char}' at line {i+1}, position {j+1}"
+                    
+                    last_open = stack.pop()
+                    expected_close = brackets[last_open[0]]
+                    
+                    if char != expected_close:
+                        return False, f"Mismatched brackets: expected '{expected_close}' but found '{char}' at line {i+1}, position {j+1}"
+        
+        if stack:
+            last = stack[-1]
+            return False, f"Unclosed bracket '{last[0]}' at line {last[1]}, position {last[2]}"
+            
+        # Specific checks based on diagram type
+        if diagram_type in ["graph", "flowchart"]:
+            # Check for missing node definitions
+            node_pattern = re.compile(r'([A-Za-z0-9_-]+)\s*(?:\[|\(|\{)')
+            defined_nodes = set(re.findall(node_pattern, mermaid_code))
+            
+            # Check for edges with undefined nodes
+            edge_pattern = re.compile(r'([A-Za-z0-9_-]+)\s*--')
+            referenced_nodes = set(re.findall(edge_pattern, mermaid_code))
+            
+            undefined_nodes = referenced_nodes - defined_nodes
+            if undefined_nodes:
+                return False, f"Referenced undefined nodes: {', '.join(undefined_nodes)}"
+                
+        elif diagram_type == "sequencediagram":
+            # Check if participants are defined
+            if not any("participant" in line.lower() or "actor" in line.lower() for line in lines):
+                # Not necessarily an error, but worth a warning
+                logger.warning("Sequence diagram doesn't explicitly define participants")
+                
+            # Check for missing arrows in message lines
+            message_pattern = re.compile(r'^\s*[^->#]+(?:->>?|-->>?|==>>?)[^:]*:')
+            for i, line in enumerate(lines):
+                # Skip comments and non-message lines
+                if line.strip().startswith("%") or "participant" in line or "actor" in line:
+                    continue
+                    
+                # Check if line looks like a message but is missing components
+                if ":" in line and not message_pattern.search(line):
+                    return False, f"Possible malformed message on line {i+1}: '{line.strip()}'"
+        
+        # No errors found
+        return True, None
+        
+    async def _fix_mermaid_diagram(self, mermaid_code: str, error_message: str, diagram_type: str) -> Optional[str]:
+        """
+        Attempt to fix a Mermaid diagram by sending it back to the LLM.
+        
+        Args:
+            mermaid_code: Original Mermaid diagram code
+            error_message: Error message from the validation
+            diagram_type: Type of diagram (architecture, sequence, etc.)
+            
+        Returns:
+            Fixed Mermaid diagram code or None if fixing failed
+        """
+        # Construct a prompt for the LLM to fix the diagram
+        fix_prompt = f"""You are a Mermaid diagram expert. 
+The following {diagram_type} diagram has syntax errors that need to be fixed:
+
+```mermaid
+{mermaid_code}
+```
+
+The validation process returned this error:
+{error_message}
+
+Please fix the diagram and return ONLY the corrected Mermaid code.
+Ensure your response begins with ```mermaid and ends with ```.
+"""
+
+        try:
+            # Send the prompt to the LLM
+            fixed_response = await self.llm.generate_content(prompt=fix_prompt, temperature=0.1)
+            
+            # Log the attempt to fix
+            if self.execution_log:
+                self.execution_log.log_llm_interaction(
+                    stage=f"Fix {diagram_type} Diagram",
+                    prompt=fix_prompt,
+                    response=fixed_response,
+                    parsed_result=None
+                )
+            
+            # Extract the fixed diagram
+            pattern = r"```mermaid\s*([\s\S]*?)```"
+            matches = re.findall(pattern, fixed_response)
+            
+            if matches:
+                fixed_code = matches[0].strip()
+                
+                # Validate the fixed diagram
+                is_valid, _ = self._validate_mermaid_diagram(fixed_code)
+                
+                if is_valid:
+                    return fixed_code
+                else:
+                    logger.warning(f"LLM attempted to fix the diagram but it's still invalid")
+                    return None
+            else:
+                logger.warning("LLM didn't return a properly formatted Mermaid diagram")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error fixing Mermaid diagram: {str(e)}")
+            return None 

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from typing import Any, List, Union, Tuple
+import asyncio
+import os
 
 from loguru import logger
 from uuid_extensions import uuid7
@@ -21,14 +23,16 @@ from services.execution_log_service import ExecutionLogService
 from jira_integration.jira_service import JiraService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
+from services.metrics_service import EpicBreakdownTracker
+from utils.config import Settings
 from .epic_analyzer import EpicAnalyzer
 from .subtask_generator import SubtaskGenerator
 from .technical_task_generator import TechnicalTaskGenerator
 from .user_story_generator import UserStoryGenerator
-import asyncio
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 from functools import partial
+from services.mongodb_service import MongoDBService
 
 
 class ExecutionManager:
@@ -336,15 +340,12 @@ class ExecutionManager:
             state_file: str
     ) -> Any:
         """
-        Load a specific execution state file from a previous execution.
-
-        This class method allows loading state files from any execution, not just
-        the current one. Useful for testing and state recovery.
+        Load a specific execution state from disk.
 
         Args:
             epic_key: The JIRA key of the epic
-            execution_id: ID of the execution to load state from
-            state_file: Name of the state file to load
+            execution_id: The execution ID
+            state_file: The name of the state file to load
 
         Returns:
             The deserialized data from the file
@@ -359,7 +360,7 @@ class ExecutionManager:
         with open(state_path, 'r') as f:
             return json.load(f)
 
-    async def execute_breakdown(self) -> EpicBreakdownResponse:
+    async def execute_breakdown(self, config: Settings = None) -> EpicBreakdownResponse:
         """
         Execute the complete epic breakdown process.
 
@@ -370,6 +371,11 @@ class ExecutionManager:
         4. Breaks down both types of tasks into subtasks
         5. Tracks progress and maintains execution state
         6. Handles errors and saves execution results
+
+        Args:
+            config: Settings object with feature flag settings to override default settings
+                   Keys should include: ENABLE_CODE_BLOCK_GENERATION, ENABLE_GHERKIN_SCENARIOS,
+                   ENABLE_RESEARCH_TASKS, ENABLE_IMPLEMENTATION_APPROACH, ENABLE_TEST_PLANS
 
         Returns:
             EpicBreakdownResponse containing the complete breakdown results
@@ -382,127 +388,85 @@ class ExecutionManager:
 
         try:
             logger.info(f"Starting breakdown for epic: {self.epic_key}")
+            
+            # Pass config to the generators if provided
+            if config:
+                self.user_story_generator.set_config(config)
+                self.technical_task_generator.set_config(config)
+                self.subtask_generator.set_config(config)
 
-            # Get epic details and analysis
-            epic_details, epic_analysis = await self.analyze_epic_details()
-
-            try:
-                # Generate high-level tasks
-                all_tasks: List[Union[UserStory, TechnicalTask]] = []
-
-                # Generate user stories
-                user_stories = await self.generate_user_stories(epic_analysis, task_tracker)
-                all_tasks.extend(user_stories)
-
-                # Generate subtasks for user stories in parallel
-                user_story_subtasks = await self.generate_subtasks_parallel(
-                    user_stories,
-                    epic_details,
-                    task_tracker,
-                    "user_story"
-                )
-
-                # Generate technical tasks
-                technical_tasks = await self.generate_technical_tasks(
-                    user_stories,
-                    epic_analysis,
-                    task_tracker
-                )
-                all_tasks.extend(technical_tasks)
-
-                # Generate subtasks for technical tasks in parallel
-                technical_task_subtasks = await self.generate_subtasks_parallel(
-                    technical_tasks,
-                    epic_details,
-                    task_tracker,
-                    "technical_task"
-                )
-
-                # Combine all subtasks
-                all_subtasks = user_story_subtasks + technical_task_subtasks
-
-                # Log completion summary
-                log_completion_summary(task_tracker, self.execution_log)
-
-                # Save final state
-                self.proposed_tickets.save()
-
-                # Save execution record
-                await self.execution_log.create_execution_record(
-                    execution_id=self.execution_id,
-                    epic_key=self.epic_key,
-                    execution_plan_file=self.execution_log.filename,
-                    proposed_plan_file=self.proposed_tickets.filename,
-                    status="SUCCESS"
-                )
-
-                response = EpicBreakdownResponse(
-                    execution_id=self.execution_id,
-                    epic_key=self.epic_key,
-                    epic_summary=epic_details.summary,
-                    analysis=epic_analysis,
-                    breakdown=BreakdownInfo(
-                        execution_plan=ExecutionPlanStats(
-                            user_stories=len(user_stories),
-                            technical_tasks=len(technical_tasks),
-                            total_subtasks=len(all_subtasks)
-                        ),
-                        proposed_tickets=ProposedTickets(
-                            file=self.proposed_tickets.filename,
-                            summary={
-                                "total_tasks": len(all_tasks),
-                                "total_subtasks": len(all_subtasks),
-                                "task_types": {
-                                    "user_stories": len(user_stories),
-                                    "technical_tasks": len(technical_tasks)
-                                }
-                            },
-                            high_level_tasks=[
-                                JiraTaskDefinition(
-                                    id=task.id,
-                                    type="User Story" if isinstance(task, UserStory) else "Technical Task",
-                                    title=task.title,
-                                    complexity=task.complexity
-                                )
-                                for task in all_tasks
-                            ],
-                            subtasks_by_parent={
-                                task.title: len([st for st in all_subtasks if st.parent_id == task.id])
-                                for task in all_tasks
-                            }
-                        )
-                    ),
-                    metrics=MetricsInfo(
-                        total_story_points=sum(subtask.story_points for subtask in all_subtasks),
-                        estimated_days=sum(subtask.story_points for subtask in all_subtasks) / 5,
-                        # Assuming 5 points per day
-                        required_skills=list(set(
-                            skill
-                            for subtask in all_subtasks
-                            for skill in subtask.required_skills
-                        ))
-                    ),
-                    tasks=[{
-                        "high_level_task": task.model_dump(),
-                        "subtasks": [
-                            st.model_dump() for st in all_subtasks if st.parent_id == task.id
-                        ]
-                    } for task in all_tasks],
-                    execution_plan_file=self.execution_log.filename,
-                    proposed_tickets_file=self.proposed_tickets.filename
-                )
+            # Use the metrics tracker as a context manager
+            async with EpicBreakdownTracker(self.epic_key):
+                # Get epic details and analysis
+                epic_details, epic_analysis = await self.analyze_epic_details()
 
                 try:
-                    self._save_state("final_result.json", response.model_dump())
-                except Exception as e:
-                    logger.error(f"Error saving final result: {str(e)}")
-                return response
+                    # Generate high-level tasks
+                    all_tasks: List[Union[UserStory, TechnicalTask]] = []
 
-            except Exception as e:
-                self._handle_task_generation_error(e, task_tracker, epic_analysis)
-                raise
+                    # Generate user stories
+                    user_stories = await self.generate_user_stories(epic_analysis, task_tracker)
+                    all_tasks.extend(user_stories)
+
+                    # Generate subtasks for user stories in parallel
+                    user_story_subtasks = await self.generate_subtasks_parallel(
+                        user_stories,
+                        epic_details,
+                        task_tracker,
+                        "user_story"
+                    )
+
+                    # Generate technical tasks
+                    technical_tasks = await self.generate_technical_tasks(
+                        user_stories,
+                        epic_analysis,
+                        task_tracker
+                    )
+                    all_tasks.extend(technical_tasks)
+
+                    # Generate subtasks for technical tasks in parallel
+                    tech_task_subtasks = await self.generate_subtasks_parallel(
+                        technical_tasks,
+                        epic_details,
+                        task_tracker,
+                        "technical_task"
+                    )
+
+                    # Combine all subtasks
+                    all_subtasks = user_story_subtasks + tech_task_subtasks
+
+                    # Generate metrics and save breakdown info
+                    metrics_info = self._generate_metrics(all_tasks, all_subtasks)
+                    self._save_breakdown_info(epic_details, epic_analysis, all_tasks, all_subtasks, metrics_info)
+
+                    # Record successful completion
+                    log_completion_summary(
+                        self.epic_key,
+                        len(user_stories),
+                        len(technical_tasks),
+                        len(all_subtasks),
+                        task_tracker.error_count
+                    )
+
+                    # Return response
+                    return EpicBreakdownResponse(
+                        execution_id=self.execution_id,
+                        epic_key=self.epic_key,
+                        epic_details=epic_details,
+                        epic_analysis=epic_analysis,
+                        user_stories=user_stories,
+                        technical_tasks=technical_tasks,
+                        subtasks=all_subtasks,
+                        metrics=metrics_info
+                    )
+
+                except Exception as e:
+                    # Handle non-fatal task generation errors
+                    self._handle_task_generation_error(e, task_tracker, epic_analysis)
+                    raise
 
         except Exception as e:
+            # Handle fatal breakdown errors
             self._handle_fatal_error(e)
             raise
 
@@ -598,3 +562,79 @@ class ExecutionManager:
         """
         self.execution_log.log_section("Fatal Error", str(error))
         self._save_state("fatal_error.json", {"error": str(error)})
+
+    def _generate_metrics(self, all_tasks: List[Union[UserStory, TechnicalTask]], all_subtasks: List[SubTask]) -> MetricsInfo:
+        """Generate metrics information from tasks and subtasks"""
+        return MetricsInfo(
+            total_story_points=sum(subtask.story_points for subtask in all_subtasks),
+            estimated_days=sum(subtask.story_points for subtask in all_subtasks) / 5,  # Assuming 5 points per day
+            required_skills=list(set(
+                skill
+                for subtask in all_subtasks
+                for skill in subtask.required_skills
+            ))
+        )
+        
+    def _save_breakdown_info(
+        self, 
+        epic_details: JiraTicketDetails, 
+        epic_analysis: AnalysisInfo,
+        all_tasks: List[Union[UserStory, TechnicalTask]], 
+        all_subtasks: List[SubTask],
+        metrics_info: MetricsInfo
+    ) -> None:
+        """Save breakdown information to state files and MongoDB"""
+        # Save proposed tickets to file
+        self.proposed_tickets.save()
+        
+        # Create breakdown response for saving
+        response = EpicBreakdownResponse(
+            execution_id=self.execution_id,
+            epic_key=self.epic_key,
+            epic_details=epic_details,
+            epic_analysis=epic_analysis,
+            user_stories=[task for task in all_tasks if isinstance(task, UserStory)],
+            technical_tasks=[task for task in all_tasks if isinstance(task, TechnicalTask)],
+            subtasks=all_subtasks,
+            metrics=metrics_info
+        )
+        
+        # Save to MongoDB
+        try:
+            logger.info(f"Saving breakdown for epic {self.epic_key} to MongoDB")
+            mongo_service = MongoDBService()
+            
+            # The proposed tickets file path
+            proposed_plan_path = self.proposed_tickets.filename
+            
+            # Persist the plan to MongoDB
+            if os.path.exists(proposed_plan_path):
+                proposal_ids = mongo_service.persist_proposed_tickets_from_yaml(proposed_plan_path)
+                logger.info(f"Saved breakdown to MongoDB with {len(proposal_ids)} proposal IDs")
+                
+                # Track the importation
+                mongo_service.track_breakdown_import(
+                    epic_key=self.epic_key,
+                    execution_id=self.execution_id,
+                    file_path=proposed_plan_path,
+                    proposal_ids=proposal_ids
+                )
+            else:
+                logger.warning(f"Proposed tickets file not found at {proposed_plan_path}")
+                
+            # Save execution record
+            asyncio.create_task(self.execution_log.create_execution_record(
+                execution_id=self.execution_id,
+                epic_key=self.epic_key,
+                execution_plan_file=self.execution_log.filename,
+                proposed_plan_file=self.proposed_tickets.filename,
+                status="SUCCESS"
+            ))
+        except Exception as e:
+            logger.error(f"Error saving breakdown to MongoDB: {str(e)}")
+        
+        # Save final state to file
+        try:
+            self._save_state("final_result.json", response.model_dump())
+        except Exception as e:
+            logger.error(f"Error saving final result: {str(e)}")

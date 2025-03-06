@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
@@ -17,11 +18,13 @@ from models import (
     ArchitectureDesignRequest,
     ArchitectureDesignResponse
 )
+from utils.config import Settings
 from services.jira_orchestration_service import JiraOrchestrationService
 from services.mongodb_service import MongoDBService
 from services.response_formatter_service import ResponseFormatterService
 from services.revision_service import RevisionService
 from services.architecture_design_service import ArchitectureDesignService
+from services.metrics_service import endpoint_request_duration_seconds
 
 router = APIRouter()
 
@@ -35,12 +38,18 @@ router = APIRouter()
 )
 async def generate_ticket_description(request: TicketGenerationRequest):
     """Generate a JIRA ticket description using LLM"""
-    execution_manager = ExecutionManager(request.epic_key)
-    return await execution_manager.epic_analyzer.generate_ticket_description(
-        context=request.context,
-        requirements=request.requirements,
-        additional_info=request.additional_info
-    )
+    start_time = time.time()
+    try:
+        execution_manager = ExecutionManager(request.epic_key)
+        return await execution_manager.epic_analyzer.generate_ticket_description(
+            context=request.context,
+            requirements=request.requirements,
+            additional_info=request.additional_info
+        )
+    finally:
+        duration = time.time() - start_time
+        endpoint_request_duration_seconds.labels(endpoint_type="ticket_generation").observe(duration)
+        logger.debug(f"Ticket description generation for {request.epic_key} completed in {duration:.2f}s")
 
 
 @router.post(
@@ -52,19 +61,42 @@ async def generate_ticket_description(request: TicketGenerationRequest):
 )
 async def analyze_ticket_complexity(request: ComplexityAnalysisRequest):
     """Analyze the complexity of a ticket"""
-    execution_manager = ExecutionManager(request.epic_key)
-    return await execution_manager.epic_analyzer.analyze_complexity(
-        ticket_description=request.ticket_description
-    )
+    start_time = time.time()
+    try:
+        execution_manager = ExecutionManager(request.epic_key)
+        return await execution_manager.epic_analyzer.analyze_complexity(
+            ticket_description=request.ticket_description
+        )
+    finally:
+        duration = time.time() - start_time
+        endpoint_request_duration_seconds.labels(endpoint_type="complexity_analysis").observe(duration)
+        logger.debug(f"Complexity analysis for {request.epic_key} completed in {duration:.2f}s")
 
 
 @router.post("/break-down-epic/{epic_key}", response_model=JiraEpicBreakdownResult)
-async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
+async def break_down_epic(
+    epic_key: str,
+    enable_code_block_generation: bool = Query(True, description="Enable code block generation"),
+    enable_gherkin_scenarios: bool = Query(True, description="Enable Gherkin scenarios"),
+    enable_research_tasks: bool = Query(True, description="Enable research tasks"),
+    enable_implementation_approach: bool = Query(True, description="Enable implementation approach"),
+    enable_test_plans: bool = Query(True, description="Enable test plans")
+) -> JiraEpicBreakdownResult:
     """Break down a JIRA epic into smaller tasks"""
+    start_time = time.time()
     try:
+        # Create Settings object with overridden values
+        config = Settings(
+            ENABLE_CODE_BLOCK_GENERATION=enable_code_block_generation,
+            ENABLE_GHERKIN_SCENARIOS=enable_gherkin_scenarios,
+            ENABLE_RESEARCH_TASKS=enable_research_tasks,
+            ENABLE_IMPLEMENTATION_APPROACH=enable_implementation_approach,
+            ENABLE_TEST_PLANS=enable_test_plans
+        )
+        
         execution_manager = ExecutionManager(epic_key)
         response_formatter = ResponseFormatterService()
-        result = await execution_manager.execute_breakdown()
+        result = await execution_manager.execute_breakdown(config=config)
         logger.info(f"Breakdown result: {result}")
         return response_formatter.format_epic_breakdown(result)
 
@@ -74,6 +106,10 @@ async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
             status_code=500,
             detail=f"Failed to break down epic: {str(e)}"
         )
+    finally:
+        duration = time.time() - start_time
+        endpoint_request_duration_seconds.labels(endpoint_type="epic_breakdown").observe(duration)
+        logger.info(f"Epic breakdown for {epic_key} completed in {duration:.2f}s")
 
 
 @router.post(
@@ -86,30 +122,51 @@ async def break_down_epic(epic_key: str) -> JiraEpicBreakdownResult:
 async def create_epic_subtasks(
         epic_key: str,
         create_in_jira: bool = False,
-        dry_run: bool = False
+        dry_run: bool = False,
+        enable_code_block_generation: bool = Query(True, description="Enable code block generation"),
+        enable_gherkin_scenarios: bool = Query(True, description="Enable Gherkin scenarios"),
+        enable_research_tasks: bool = Query(True, description="Enable research tasks"),
+        enable_implementation_approach: bool = Query(True, description="Enable implementation approach"),
+        enable_test_plans: bool = Query(True, description="Enable test plans")
 ):
     """Break down an epic and optionally create the subtasks in JIRA"""
+    start_time = time.time()
     logger.info(f"Received request to create subtasks for epic: {epic_key}")
     logger.debug(f"Create in JIRA: {create_in_jira}, Dry run: {dry_run}")
-
-    execution_manager = ExecutionManager(epic_key)
-    jira_orchestration_service = JiraOrchestrationService()
-    breakdown = await execution_manager.execute_breakdown()
-
-    if dry_run:
-        execution_plan = await jira_orchestration_service.create_execution_plan(
-            epic_key,
-            breakdown
+    
+    try:
+        # Create Settings object with overridden values
+        config = Settings(
+            ENABLE_CODE_BLOCK_GENERATION=enable_code_block_generation,
+            ENABLE_GHERKIN_SCENARIOS=enable_gherkin_scenarios,
+            ENABLE_RESEARCH_TASKS=enable_research_tasks,
+            ENABLE_IMPLEMENTATION_APPROACH=enable_implementation_approach,
+            ENABLE_TEST_PLANS=enable_test_plans
         )
-        breakdown["execution_plan"] = execution_plan
-    elif create_in_jira:
-        created_tasks = await jira_orchestration_service.create_epic_breakdown_structure(
-            epic_key,
-            breakdown
-        )
-        breakdown["created_jira_tasks"] = created_tasks
 
-    return breakdown
+        execution_manager = ExecutionManager(epic_key)
+        jira_orchestration_service = JiraOrchestrationService()
+        breakdown = await execution_manager.execute_breakdown(config=config)
+
+        if dry_run:
+            execution_plan = await jira_orchestration_service.create_execution_plan(
+                epic_key,
+                breakdown
+            )
+            breakdown["execution_plan"] = execution_plan
+        elif create_in_jira:
+            created_tasks = await jira_orchestration_service.create_epic_breakdown_structure(
+                epic_key,
+                breakdown
+            )
+            breakdown["created_jira_tasks"] = created_tasks
+
+        return breakdown
+    finally:
+        duration = time.time() - start_time
+        operation_type = "dry_run" if dry_run else "create_in_jira" if create_in_jira else "breakdown_only"
+        endpoint_request_duration_seconds.labels(endpoint_type=f"epic_subtasks_{operation_type}").observe(duration)
+        logger.info(f"Create epic subtasks for {epic_key} completed in {duration:.2f}s (operation: {operation_type})")
 
 
 @router.post(
@@ -142,6 +199,7 @@ async def design_architecture(
     Raises:
         HTTPException: If architecture design generation fails
     """
+    start_time = time.time()
     try:
         logger.info(f"Received request to design architecture for epic: {epic_key}")
         logger.debug(f"Cloud provider: {cloud_provider}")
@@ -157,19 +215,16 @@ async def design_architecture(
         )
         
         return response
-        
-    except ValueError as ve:
-        logger.error(f"Validation error: {str(ve)}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(ve)
-        )
     except Exception as e:
         logger.error(f"Failed to design architecture for epic {epic_key}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to design architecture: {str(e)}"
         )
+    finally:
+        duration = time.time() - start_time
+        endpoint_request_duration_seconds.labels(endpoint_type="architecture_design").observe(duration)
+        logger.info(f"Architecture design for {epic_key} completed in {duration:.2f}s")
 
 
 @router.post("/revise-plan/{execution_id}/ticket/{ticket_id}")

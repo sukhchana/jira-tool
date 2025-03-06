@@ -17,6 +17,8 @@ tabulate
 pymongo
 google-genai
 pydantic-settings
+prometheus-client
+prometheus-fastapi-instrumentator
 
 # Testing dependencies
 pytest

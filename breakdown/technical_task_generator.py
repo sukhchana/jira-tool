@@ -20,16 +20,31 @@ from prompts.technical_task_prompt_builder import TechnicalTaskPromptBuilder
 from services.execution_log_service import ExecutionLogService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
-from utils.config import settings
+from utils.config import settings, Settings
 from utils.json_sanitizer import JSONSanitizer
+from llm.llm_service_factory import get_llm_service
 
 
 class TechnicalTaskGenerator:
     """Service responsible for generating technical tasks from user stories"""
 
     def __init__(self, execution_log: ExecutionLogService):
-        self.llm = VertexLLM()
+        """Initialize with dependencies"""
         self.execution_log = execution_log
+        self.llm_service = get_llm_service()
+        self.settings = settings  # Default settings
+        
+    def set_config(self, config: Settings):
+        """Override default settings with provided configuration
+        
+        Args:
+            config: Settings object with feature flag settings
+        """
+        if not config:
+            return
+            
+        self.settings = config
+        logger.debug(f"TechnicalTaskGenerator settings updated: {vars(self.settings)}")
 
     async def generate_technical_tasks(
             self,
@@ -62,7 +77,7 @@ class TechnicalTaskGenerator:
             )
             
             try:
-                response = await self.llm.generate_content(prompt, temperature=0.2)
+                response = await self.llm_service.generate_content(prompt, temperature=0.2)
             except Exception as e:
                 # Log the LLM error before re-raising
                 self.execution_log.log_llm_interaction(
@@ -216,7 +231,7 @@ class TechnicalTaskGenerator:
         try:
             logger.debug(f"Generating research summary for task: {task_context.get('title')}")
 
-            if not settings.ENABLE_RESEARCH_TASKS:
+            if not self.settings.ENABLE_RESEARCH_TASKS:
                 logger.debug("Research tasks disabled, skipping LLM call")
                 return ResearchSummary(
                     pain_points="",
@@ -226,7 +241,7 @@ class TechnicalTaskGenerator:
                 )
 
             prompt = TechnicalTaskPromptBuilder.build_technical_task_research_prompt(task_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing research summary response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response)
             
@@ -253,12 +268,12 @@ class TechnicalTaskGenerator:
         """Generate code examples for a technical task"""
         logger.debug(f"Generating code examples for task: {task_context.get('title')}")
 
-        if not settings.ENABLE_CODE_BLOCK_GENERATION:
+        if not self.settings.ENABLE_CODE_BLOCK_GENERATION:
             logger.debug("Code block generation disabled, skipping LLM call")
             return []
 
         prompt = TechnicalTaskPromptBuilder.build_code_examples_prompt(task_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
+        response = await self.llm_service.generate_content(prompt, temperature=0.2)
         logger.debug("Parsing code examples response")
         code_blocks_data = CodeBlockParser.parse(response)
         return [CodeBlock(**block) for block in code_blocks_data]
@@ -267,12 +282,12 @@ class TechnicalTaskGenerator:
         """Generate Gherkin scenarios for a technical task"""
         logger.debug(f"Generating Gherkin scenarios for task: {task_context.get('title')}")
 
-        if not settings.ENABLE_GHERKIN_SCENARIOS:
+        if not self.settings.ENABLE_GHERKIN_SCENARIOS:
             logger.debug("Gherkin scenarios disabled, skipping LLM call")
             return []
 
         prompt = TechnicalTaskPromptBuilder.build_gherkin_scenarios_prompt(task_context)
-        response = await self.llm.generate_content(prompt, temperature=0.2)
+        response = await self.llm_service.generate_content(prompt, temperature=0.2)
         logger.debug("Parsing Gherkin scenarios response")
         scenarios_data = GherkinParser.parse(response)
         return [GherkinScenario(**scenario) for scenario in scenarios_data]

@@ -14,20 +14,35 @@ from prompts.subtask_prompt_builder import SubtaskPromptBuilder
 from services.execution_log_service import ExecutionLogService
 from services.proposed_tickets_service import ProposedTicketsService
 from services.task_tracker import TaskTracker
-from utils.config import settings
+from utils.config import settings, Settings
 from utils.json_sanitizer import JSONSanitizer
 from models.test_plan import TestPlan
 from models.code_example import CodeExample
 from models.implementation_approach import ImplementationApproach
 from models.research_summary import ResearchSummary
+from llm.llm_service_factory import get_llm_service
 
 
 class SubtaskGenerator:
     """Service responsible for breaking down high-level tasks into subtasks"""
 
     def __init__(self, execution_log: ExecutionLogService):
-        self.llm = VertexLLM()
+        """Initialize with required services"""
         self.execution_log = execution_log
+        self.llm_service = get_llm_service()
+        self.settings = settings  # Default settings
+        
+    def set_config(self, config: Settings):
+        """Override default settings with provided configuration
+        
+        Args:
+            config: Settings object with feature flag settings
+        """
+        if not config:
+            return
+            
+        self.settings = config
+        logger.debug(f"SubtaskGenerator settings updated: {vars(self.settings)}")
 
     async def break_down_tasks(
             self,
@@ -124,7 +139,7 @@ class SubtaskGenerator:
             prompt = SubtaskPromptBuilder.build_subtasks_prompt(parent_task, epic_details)
 
             logger.debug("Calling LLM for subtask generation")
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
 
             logger.debug("Raw LLM response for subtasks:")
             logger.debug("-" * 80)
@@ -148,7 +163,7 @@ class SubtaskGenerator:
         try:
             logger.debug(f"Generating implementation approach for subtask: {subtask_context.get('title')}")
 
-            if not settings.ENABLE_IMPLEMENTATION_APPROACH:
+            if not self.settings.ENABLE_IMPLEMENTATION_APPROACH:
                 logger.debug("Implementation approach disabled, skipping LLM call")
                 return ImplementationApproach(
                     architecture="",
@@ -160,7 +175,7 @@ class SubtaskGenerator:
                 )
 
             prompt = SubtaskPromptBuilder.build_implementation_approach_prompt(subtask_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing implementation approach response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response)
             
@@ -192,12 +207,12 @@ class SubtaskGenerator:
         try:
             logger.debug(f"Generating code examples for subtask: {subtask_context.get('title')}")
 
-            if not settings.ENABLE_CODE_BLOCK_GENERATION:
+            if not self.settings.ENABLE_CODE_BLOCK_GENERATION:
                 logger.debug("Code block generation disabled, skipping LLM call")
                 return []
 
             prompt = SubtaskPromptBuilder.build_code_examples_prompt(subtask_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing code examples response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response, [])
             
@@ -243,7 +258,7 @@ class SubtaskGenerator:
         try:
             logger.debug(f"Generating testing plan for subtask: {subtask_context.get('title')}")
 
-            if not settings.ENABLE_TEST_PLANS:
+            if not self.settings.ENABLE_TEST_PLANS:
                 logger.debug("Test plan generation disabled, skipping LLM call")
                 return TestPlan(
                     unit_tests=[],
@@ -254,7 +269,7 @@ class SubtaskGenerator:
                 )
 
             prompt = SubtaskPromptBuilder.build_testing_plan_prompt(subtask_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing testing plan response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response)
             
@@ -284,7 +299,7 @@ class SubtaskGenerator:
         try:
             logger.debug(f"Generating research summary for subtask: {subtask_context.get('title')}")
 
-            if not settings.ENABLE_RESEARCH_TASKS:
+            if not self.settings.ENABLE_RESEARCH_TASKS:
                 logger.debug("Research tasks disabled, skipping LLM call")
                 return ResearchSummary(
                     pain_points="",
@@ -294,7 +309,7 @@ class SubtaskGenerator:
                 )
 
             prompt = SubtaskPromptBuilder.build_research_summary_prompt(subtask_context)
-            response = await self.llm.generate_content(prompt)
+            response = await self.llm_service.generate_content(prompt)
             logger.debug("Parsing research summary response")
             raw_data = JSONSanitizer.safe_parse_with_fallback(response)
             

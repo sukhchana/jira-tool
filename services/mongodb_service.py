@@ -15,23 +15,118 @@ import yaml
 from loguru import logger
 from database import MongoConnection
 from models.revision_record import RevisionRecord
+from pymongo import MongoClient
+from pymongo.database import Database
+from services.metrics_service import track_db_operation, mongodb_import_duration_seconds, mongodb_import_proposal_count
+import time
 
 
 class MongoDBService:
-    """Service for handling MongoDB operations"""
+    """Service for interacting with MongoDB database"""
 
     def __init__(self):
-        """Initialize MongoDB collections using centralized connection"""
-        # Get database instance from connection manager
-        self.db = MongoConnection().db
-
-        # Initialize collections
-        self.proposed_tickets: Collection = self.db.proposed_tickets
-        self.revisions: Collection = self.db.revisions
-        self.executions: Collection = self.db.executions
-
-        # Create indexes
-        self._setup_indexes()
+        """Initialize MongoDB connection from environment variables"""
+        mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+        db_name = os.getenv("MONGODB_DATABASE", "jira_tool")
+        
+        try:
+            self.client = MongoClient(mongo_uri)
+            self.db = self.client[db_name]
+            logger.info(f"Connected to MongoDB database: {db_name}")
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {str(e)}")
+            raise
+    
+    def get_collection(self, collection_name: str) -> Collection:
+        """Get a MongoDB collection by name"""
+        return self.db[collection_name]
+    
+    async def find_one(self, collection_name: str, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Find a single document in the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _find_one():
+            return collection.find_one(query)
+        
+        return await track_db_operation("find_one", _find_one)
+    
+    async def find_many(self, collection_name: str, query: Dict[str, Any], limit: int = 0) -> List[Dict[str, Any]]:
+        """Find multiple documents in the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _find_many():
+            cursor = collection.find(query)
+            if limit > 0:
+                cursor = cursor.limit(limit)
+            return list(cursor)
+        
+        return await track_db_operation("find_many", _find_many)
+    
+    async def insert_one(self, collection_name: str, document: Dict[str, Any]) -> str:
+        """Insert a single document into the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _insert_one():
+            result = collection.insert_one(document)
+            return str(result.inserted_id)
+        
+        return await track_db_operation("insert_one", _insert_one)
+    
+    async def insert_many(self, collection_name: str, documents: List[Dict[str, Any]]) -> List[str]:
+        """Insert multiple documents into the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _insert_many():
+            result = collection.insert_many(documents)
+            return [str(id) for id in result.inserted_ids]
+        
+        return await track_db_operation("insert_many", _insert_many)
+    
+    async def update_one(self, collection_name: str, query: Dict[str, Any], update: Dict[str, Any]) -> int:
+        """Update a single document in the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _update_one():
+            result = collection.update_one(query, update)
+            return result.modified_count
+        
+        return await track_db_operation("update_one", _update_one)
+    
+    async def update_many(self, collection_name: str, query: Dict[str, Any], update: Dict[str, Any]) -> int:
+        """Update multiple documents in the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _update_many():
+            result = collection.update_many(query, update)
+            return result.modified_count
+        
+        return await track_db_operation("update_many", _update_many)
+    
+    async def delete_one(self, collection_name: str, query: Dict[str, Any]) -> int:
+        """Delete a single document from the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _delete_one():
+            result = collection.delete_one(query)
+            return result.deleted_count
+        
+        return await track_db_operation("delete_one", _delete_one)
+    
+    async def delete_many(self, collection_name: str, query: Dict[str, Any]) -> int:
+        """Delete multiple documents from the specified collection with metrics tracking"""
+        collection = self.get_collection(collection_name)
+        
+        async def _delete_many():
+            result = collection.delete_many(query)
+            return result.deleted_count
+        
+        return await track_db_operation("delete_many", _delete_many)
+    
+    def close(self):
+        """Close the MongoDB client connection"""
+        if hasattr(self, 'client'):
+            self.client.close()
+            logger.info("Closed MongoDB connection")
 
     def _setup_indexes(self):
         """Setup necessary indexes for the collections"""
@@ -168,6 +263,7 @@ class MongoDBService:
         Read proposed tickets from a YAML file and persist them to MongoDB
         Returns list of inserted proposal IDs
         """
+        start_time = time.time()
         try:
             # Read YAML file
             with open(yaml_file_path, 'r') as f:
@@ -199,6 +295,11 @@ class MongoDBService:
                 # Process subtasks if any
                 subtasks = yaml_data.get('subtasks', {}).get(task['title'], [])
                 proposal_ids.extend(self._process_subtasks(task_id, subtasks, epic_key, execution_id))
+
+            # Track MongoDB import metrics
+            self.track_breakdown_import(epic_key, execution_id, yaml_file_path, proposal_ids)
+            mongodb_import_duration_seconds.labels(epic_key=epic_key).observe(time.time() - start_time)
+            mongodb_import_proposal_count.labels(epic_key=epic_key).observe(len(proposal_ids))
 
             return proposal_ids
 
@@ -432,6 +533,38 @@ class MongoDBService:
             update_data[field] = [v for v in current if v not in values]
 
         return update_data
+
+    def track_breakdown_import(self, epic_key: str, execution_id: str, file_path: str, proposal_ids: List[str]) -> str:
+        """
+        Track the importation of an epic breakdown to MongoDB
+        
+        Args:
+            epic_key: The JIRA epic key
+            execution_id: The execution ID
+            file_path: Path to the YAML file
+            proposal_ids: List of proposal IDs saved to MongoDB
+            
+        Returns:
+            ID of the created import record
+        """
+        import_record = {
+            "epic_key": epic_key,
+            "execution_id": execution_id,
+            "file_path": file_path,
+            "import_timestamp": datetime.now(UTC).isoformat(),
+            "proposal_count": len(proposal_ids),
+            "proposal_ids": proposal_ids,
+            "status": "completed"
+        }
+        
+        result = self.executions.update_one(
+            {"execution_id": execution_id},
+            {"$set": {"mongodb_import": import_record}},
+            upsert=True
+        )
+        
+        logger.info(f"Tracked MongoDB import for epic {epic_key}, execution {execution_id} with {len(proposal_ids)} proposals")
+        return str(execution_id)
 
 
 if __name__ == "__main__":
